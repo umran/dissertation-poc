@@ -1,26 +1,30 @@
 import torch
+from tqdm import tqdm
 from typing import Tuple, List
-from util.replay_buffer import ReplayBuffer
-from util.episodic_replay_buffer import EpisodicReplayBuffer
-from environment import Environment
-from policy import Policy
-from actor_critic import ActorCritic
+
+from algorithms.common import ReplayBuffer, EpisodicReplayBuffer
+from algorithms.policy import Policy
+from algorithms.actor_critic import ActorCritic
+from environments.environment import Environment
 
 class HybridHMC:
-    def __init__(self, env: Environment, actor_critic: ActorCritic):
+    def __init__(self, env: Environment, actor_critic: ActorCritic, device: torch.device = torch.device("cpu")):
         self.env = env
         self.actor_critic = actor_critic
+        self.device = device
         
         self.replay_buffer = ReplayBuffer(
-            100_000,
+            1_000_000,
             env.state_shape(),
-            env.action_shape()
+            env.action_shape(),
+            device=device
         )
 
         self.episodic_replay_buffer = EpisodicReplayBuffer(
-            100_000,
+            1_000_000,
             env.state_shape(),
-            env.action_shape()
+            env.action_shape(),
+            device=device
         )
     
     def sample_policy(self) -> Policy:
@@ -28,17 +32,22 @@ class HybridHMC:
         # randomly sampled from the posterior estimated by HMC
 
         # the following is just a placeholder for now
-        self.actor_critic.get_exploratory_policy()
+        return self.actor_critic.get_exploration_policy()
 
-    def train(self, gamma=0.99, steps=100_000):    
+    def train(self, steps=100_000, start_steps=10_000, gamma=0.99):    
         policy = self.sample_policy()
         state = self.env.reset()
         episode_steps: List[Tuple[torch.Tensor, torch.Tensor, float, torch.Tensor, bool]] = []
 
-
-        for step in range(steps):
-            action = policy.action(state)
-            next_state, reward, term, trunc = self.env.step(action)
+        for step in tqdm(range(steps)):
+            if step < start_steps:
+                # need to refactor this for the generic use case where the range
+                # can be arbitrary
+                action = 2 * torch.rand(self.env.action_shape(), device=self.device) - 1
+            else:
+                action = policy.action(state)
+            
+            next_state, reward, term, trunc, _ = self.env.step(action)
             done = term or trunc
 
             # append state, action, reward, done, next_state to episode_steps and replay buffer

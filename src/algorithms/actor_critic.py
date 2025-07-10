@@ -1,6 +1,7 @@
 from abc import ABC, abstractmethod
-from util.replay_buffer import ReplayBuffer
-from policy import Policy
+
+from algorithms.common import ReplayBuffer
+from algorithms.policy import Policy
 
 class ActorCritic(ABC):
     @abstractmethod
@@ -12,5 +13,5 @@ class ActorCritic(ABC):
         pass
 
     @abstractmethod
-    def get_exploratory_policy(self) -> Policy:
+    def get_exploration_policy(self) -> Policy:
         pass

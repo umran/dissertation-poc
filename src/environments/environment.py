@@ -4,12 +4,12 @@ from typing import Tuple, Any
 
 class Environment(ABC):
     @abstractmethod
-    def state_shape(self) -> torch.Size:
+    def state_shape(self) -> Tuple[int, ...]:
         """Return the shape of the environment state."""
         pass
 
     @abstractmethod
-    def action_shape(self) -> torch.Size:
+    def action_shape(self) -> Tuple[int, ...]:
         """Return the shape of the environment action."""
         pass
 
@@ -22,13 +22,13 @@ class Environment(ABC):
         pass
 
     @abstractmethod
-    def step(self, a: torch.Tensor) -> Tuple[torch.Tensor, float, bool, bool, Any]:
+    def step(self, action: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, Any]:
         """
         Take an action `a` and return:
         - next_state: torch.Tensor (must have shape equal to self.state_shape())
-        - reward: float
-        - terminated: bool
-        - truncated: bool
+        - reward: torch.Tensor float
+        - terminated: torch.Tensor bool
+        - truncated: torch.Tensor bool
         - info: Any
         """
         pass
