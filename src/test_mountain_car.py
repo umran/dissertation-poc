@@ -41,7 +41,7 @@ def demo():
     mountain_car_env = MountainCar()
     hybrid_hmc = HybridHMC(mountain_car_env, ddpg)
 
-    hybrid_hmc.train(1_000_000)
+    hybrid_hmc.train()
     optimized_policy = ddpg.get_optimal_policy()
 
     demo_env = MountainCar(render_mode="human")
