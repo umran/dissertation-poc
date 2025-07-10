@@ -1,8 +1,12 @@
+import torch
+import torch.optim as optim
 import jax
 import jax.numpy as jnp
 import numpyro
 import numpyro.distributions as dist
+from numpy.typing import ArrayLike
 from numpyro.infer import MCMC, NUTS
+from typing import Callable
 
 def relu(x):
     return jnp.maximum(0, x)
@@ -47,3 +51,43 @@ def run_mcmc(state, action, target, num_samples=1000, num_warmup=500, rng_key=ja
     
     samples = mcmc.get_samples()
     return samples
+
+
+# to be refined
+type QFunction = Callable[[ArrayLike, ArrayLike], jnp.ndarray]
+
+def sample_q_function(samples, rng_key) -> QFunction:
+    idx = jax.random.randint(rng_key, shape=(), minval=0, maxval=samples['layer1_w'].shape[0])
+    q_params = {k: v[idx] for k, v in samples.items()}
+    
+    def q_fn(s: ArrayLike, a: ArrayLike) -> jnp.ndarray:
+        x = jnp.concatenate([s, a], axis=-1)
+        z1 = relu(jnp.dot(x, q_params['layer1_w']) + q_params['layer1_b'])
+        z2 = relu(jnp.dot(z1, q_params['layer2_w']) + q_params['layer2_b'])
+        out = jnp.dot(z2, q_params['output_w']) + q_params['output_b']
+        return out
+    
+    return q_fn
+
+def optimize_policy(q_fn: QFunction, policy_cls: torch.Module, state_batch: torch.Tensor, num_steps=10, lr=1e-2, device: torch.device = torch.device("cpu")):
+    policy = policy_cls().to(device)
+    optimizer = optim.Adam(policy.parameters(), lr=lr)
+
+    for _ in range(num_steps):
+        optimizer.zero_grad()
+        actions = policy(state_batch)
+
+        # Convert to numpy → JAX → evaluate Q
+        s_np = state_batch.detach().cpu().numpy()
+        a_np = actions.detach().cpu().numpy()
+        q_values = q_fn(s_np, a_np)
+        q_values = jnp.array(q_values).squeeze()  # JAX DeviceArray → NumPy → scalar
+
+        # Convert to torch tensor and take negative (gradient ascent)
+        q_tensor = torch.tensor(q_values, dtype=torch.float32, device=device)
+        loss = -q_tensor.mean()  # gradient ascent
+
+        loss.backward()
+        optimizer.step()
+
+    return policy  # Can be used for action selection during next episode
