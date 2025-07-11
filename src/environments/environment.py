@@ -14,6 +14,16 @@ class Environment(ABC):
         pass
 
     @abstractmethod
+    def action_min(self) -> torch.Tensor:
+        """Return the min action. It must conform to the shape as returned by action_shape"""
+        pass
+
+    @abstractmethod
+    def action_max(self) -> torch.Tensor:
+        """Return the max action. It must conform to the shape as returned by action_shape"""
+        pass
+
+    @abstractmethod
     def reset(self) -> torch.Tensor:
         """
         Reset the environment and return the initial state tensor.

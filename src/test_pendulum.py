@@ -3,9 +3,9 @@ import torch.nn as nn
 import torch.nn.functional as F
 from algorithms.ddpg import DDPG
 from algorithms.hybrid_hmc import HybridHMC
-from environments.mountain_car import MountainCar
+from environments.pendulum import Pendulum
 
-STATE_DIM = 2
+STATE_DIM = 3
 ACTION_DIM = 1
 
 class QNetwork(nn.Module):
@@ -33,18 +33,19 @@ class PolicyNetwork(nn.Module):
     def forward(self, state):
         x = F.relu(self.fc1(state))
         x = F.relu(self.fc2(x))
-        action = torch.tanh(self.out(x))
+        action = 2 * torch.tanh(self.out(x))
+        
         return action
 
 def demo():
     ddpg = DDPG(QNetwork, PolicyNetwork)
-    mountain_car_env = MountainCar()
-    hybrid_hmc = HybridHMC(mountain_car_env, ddpg, PolicyNetwork)
+    pendulum = Pendulum()
+    hybrid_hmc = HybridHMC(pendulum, ddpg, PolicyNetwork)
 
     hybrid_hmc.train()
     optimized_policy = ddpg.get_optimal_policy()
 
-    demo_env = MountainCar(render_mode="human")
+    demo_env = Pendulum(render_mode="human")
 
     state = demo_env.reset()
 

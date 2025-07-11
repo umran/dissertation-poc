@@ -4,22 +4,22 @@ from typing import Tuple, Any
 
 from environments.environment import Environment
 
-class MountainCar(Environment):
+class Pendulum(Environment):
     def __init__(self, render_mode: str = "rgb_array", device: torch.device = torch.device("cpu")):
-        self.env = gym.make("MountainCarContinuous-v0", render_mode=render_mode)
+        self.env = gym.make("Pendulum-v1", render_mode=render_mode)
         self.device = device
 
     def state_shape(self) -> Tuple[int, ...]:
-        return (2, )
+        return (3, )
 
     def action_shape(self) -> Tuple[int, ...]:
         return (1, )
     
     def action_min(self) -> torch.Tensor:
-        return torch.tensor([-1.0], dtype=torch.float32, device=self.device)
+        return torch.tensor([-2.0], dtype=torch.float32, device=self.device)
 
     def action_max(self) -> torch.Tensor:
-        return torch.tensor([1.0], dtype=torch.float32, device=self.device)
+        return torch.tensor([2.0], dtype=torch.float32, device=self.device)
 
     def reset(self) -> torch.Tensor:
         observation, _ = self.env.reset()

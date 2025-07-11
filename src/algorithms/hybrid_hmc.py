@@ -1,18 +1,32 @@
 import torch
+import torch.optim as optim
+import torch.nn as nn
+import jax
 import jax.numpy as jnp
+import numpyro
+import numpyro.distributions as dist
+from numpyro.infer import MCMC, NUTS
+from typing import Tuple, List, Type
 # from tqdm import tqdm
-from typing import Tuple, List
 
 from algorithms.common import ReplayBuffer, EpisodicReplayBuffer
 from algorithms.policy import Policy
 from algorithms.actor_critic import ActorCritic
-from algorithms.q_model import run_mcmc
 from environments.environment import Environment
 
 class HybridHMC:
-    def __init__(self, env: Environment, actor_critic: ActorCritic, device: torch.device = torch.device("cpu")):
+    def __init__(
+        self,
+        env: Environment,
+        actor_critic: ActorCritic,
+        policy_cls: Type[nn.Module],
+        rng_key = jax.random.key(0),
+        device: torch.device = torch.device("cpu"),
+    ):
         self.env = env
         self.actor_critic = actor_critic
+        self.policy_cls = policy_cls
+        self.rng_key = rng_key
         self.device = device
         
         self.replay_buffer = ReplayBuffer(
@@ -28,25 +42,10 @@ class HybridHMC:
             env.action_shape(),
             device=device
         )
-    
-    def update_posteior(self):
-        state, action, _, mc_return, _, _ = self.episodic_replay_buffer.sample(128)
 
-        state = jnp.array(state.numpy())
-        action = jnp.array(action.numpy())
-        target = jnp.array(mc_return.numpy())
+        self.q_weight_posterior = None
 
-        samples = run_mcmc(state, action, target)
-        
-
-    def sample_policy(self) -> Policy:
-        # this method should return the policy corresponding to a Q function
-        # randomly sampled from the posterior estimated by HMC
-
-        # the following is just a placeholder for now
-        return self.actor_critic.get_exploration_policy()
-
-    def train(self, steps=1_000_000, start_steps=10_000, update_after=100_000, update_every=100_000, gamma=0.99):    
+    def train(self, steps=100_000, start_steps=10_000, update_after=10_000, update_every=10_000, gamma=0.99):    
         policy = self.sample_policy()
         state = self.env.reset()
         episode_steps: List[Tuple[torch.Tensor, torch.Tensor, float, torch.Tensor, bool]] = []
@@ -54,12 +53,10 @@ class HybridHMC:
         for step in range(steps):
             # coarse progress tracking
             if step % 10_000 == 0:
-                print(step) 
+                print(step)
             
             if step < start_steps:
-                # need to refactor this for the generic use case where the range
-                # can be arbitrary
-                action = 2 * torch.rand(self.env.action_shape(), device=self.device) - 1
+                action = self.random_action()
             else:
                 action = policy.action(state)
             
@@ -94,5 +91,129 @@ class HybridHMC:
             # update posterior
             if step >= update_after and step % update_every == 0:
                 print("updating posterior")
-                self.update_posteior()
+                self.update_posterior()
+
+    def random_action(self):
+        low = self.env.action_min()
+        high = self.env.action_max()
+        
+        return low + (high - low) * torch.rand(self.env.action_shape(), device=self.device)
+
+    def update_posterior(self):
+        state, action, _, mc_return, _, _ = self.episodic_replay_buffer.sample(128)
+
+        state = jnp.array(state.cpu().numpy())
+        action = jnp.array(action.cpu().numpy())
+        target = jnp.array(mc_return.cpu().numpy())
+
+        # def run_mcmc(state, action, target, num_samples=1000, num_warmup=500, rng_key=jax.random.key(0)):
+        kernel = NUTS(q_model)
+        mcmc = MCMC(kernel, num_warmup=500, num_samples=1000, num_chains=1)
+        
+        mcmc.run(self.next_rng_key(), state=state, action=action, y=target)
+        mcmc.print_summary()
+        
+        self.q_weight_posterior = mcmc.get_samples()
+        
+
+    def sample_policy(self) -> Policy:
+        # this method should return the policy corresponding to a Q function
+        # randomly sampled from the posterior estimated by HMC if a posterior
+        # has been estimated, otherwise returns the underlying actor-critic
+        #  exploration policy
+        if self.q_weight_posterior is None:
+            return self.actor_critic.get_exploration_policy()
+        
+        # sample a set of q network parameters from mcmc samples
+        idx = jax.random.randint(self.next_rng_key(), shape=(), minval=0, maxval=self.q_weight_posterior['layer1_w'].shape[0])
+        q_params = {
+            k: jax.device_get(v[idx])  # Convert from JAX DeviceArray
+            for k, v in self.q_weight_posterior.items()
+        }
+
+        # construct a q network from sampled parameters
+        q_net = SampledQNetwork(q_params).to(self.device)
+
+        # instantiate a new policy
+        policy_net = self.policy_cls().to(self.device)
+        
+        # instantiate optimizer for policy parameters
+        optimizer = optim.Adam(policy_net.parameters(), lr=1e-3)
+        
+        # sample a batch of states to optimize policy against
+        state, _, _, _, _ = self.replay_buffer.sample(128)
+
+        for _ in range(20):
+            action = policy_net(state)
+            value = q_net(state, action)
+            loss = -value.mean()
+
+            optimizer.zero_grad()
+            loss.backward()
+            optimizer.step()
+        
+        return SampledPolicy(policy_net)
+
+    def next_rng_key(self):
+        self.rng_key, subkey = jax.random.split(self.rng_key)
+        
+        return subkey
+
+class SampledQNetwork(nn.Module):
+    def __init__(self, weights):
+        super().__init__()
+        self.weights = nn.ParameterDict({
+            k: nn.Parameter(torch.tensor(v, dtype=torch.float32), requires_grad=False)
+            for k, v in weights.items()
+        })
+
+    def forward(self, state: torch.Tensor, action: torch.Tensor) -> torch.Tensor:
+        x = torch.cat([state, action], dim=-1)
+
+        z1 = torch.relu(torch.matmul(x, self.weights["layer1_w"]) + self.weights["layer1_b"])
+        z2 = torch.relu(torch.matmul(z1, self.weights["layer2_w"]) + self.weights["layer2_b"])
+        out = torch.matmul(z2, self.weights["output_w"]) + self.weights["output_b"]
+       
+        return out
+
+class SampledPolicy(Policy):
+    def __init__(self, policy_net: nn.Module):
+        self.policy_net = policy_net
     
+    def action(self, state: torch.Tensor) -> torch.Tensor:
+        with torch.no_grad():
+            return self.policy_net(state)    
+
+def q_model(state, action, hidden_sizes=[32, 32], y=None):
+    x = jnp.concatenate([state, action], axis=-1)
+    n, input_dim = x.shape
+    h1_dim, h2_dim = hidden_sizes
+
+    # First layer
+    z1 = relu(ard_linear("layer1", x, input_dim, h1_dim))
+
+    # Second layer
+    z2 = relu(ard_linear("layer2", z1, h1_dim, h2_dim))
+
+    # Output layer
+    out = ard_linear("output", z2, h2_dim, 1)
+    assert out.shape == (n, 1)
+
+    if y is not None:
+        assert y.shape == (n, 1)
+        sigma_obs = numpyro.sample("sigma_obs", dist.Exponential(1.0))
+        with numpyro.plate("data", n):
+            numpyro.sample("y", dist.Normal(out.squeeze(-1), sigma_obs), obs=y.squeeze(-1))
+
+def relu(x):
+    return jnp.maximum(0, x)
+
+def ard_linear(name, x, in_dim, out_dim):
+    # ARD: log-precision for each weight and bias
+    weight_scale = numpyro.sample(f"{name}_weight_scale", dist.Gamma(1.0, 1.0).expand([in_dim, out_dim]))
+    bias_scale = numpyro.sample(f"{name}_bias_scale", dist.Gamma(1.0, 1.0).expand([out_dim]))
+
+    w = numpyro.sample(f"{name}_w", dist.Normal(0., 1. / jnp.sqrt(weight_scale)))
+    b = numpyro.sample(f"{name}_b", dist.Normal(0., 1. / jnp.sqrt(bias_scale)))
+
+    return jnp.dot(x, w) + b
