@@ -38,14 +38,12 @@ class PolicyNetwork(nn.Module):
 
 def demo():
     ddpg = DDPG(QNetwork, PolicyNetwork)
-    mountain_car_env = MountainCar()
-    hybrid_hmc = HybridHMC(mountain_car_env, ddpg, PolicyNetwork)
+    hybrid_hmc = HybridHMC(MountainCar(), ddpg, PolicyNetwork)
 
     hybrid_hmc.train()
     optimized_policy = ddpg.get_optimal_policy()
 
     demo_env = MountainCar(render_mode="human")
-
     state = demo_env.reset()
 
     while True:

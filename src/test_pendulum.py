@@ -39,14 +39,12 @@ class PolicyNetwork(nn.Module):
 
 def demo():
     ddpg = DDPG(QNetwork, PolicyNetwork)
-    pendulum = Pendulum()
-    hybrid_hmc = HybridHMC(pendulum, ddpg, PolicyNetwork)
+    hybrid_hmc = HybridHMC(Pendulum(), ddpg, PolicyNetwork)
 
     hybrid_hmc.train()
     optimized_policy = ddpg.get_optimal_policy()
 
     demo_env = Pendulum(render_mode="human")
-
     state = demo_env.reset()
 
     while True:
