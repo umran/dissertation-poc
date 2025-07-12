@@ -7,7 +7,7 @@ import numpyro
 import numpyro.distributions as dist
 from numpyro.infer import MCMC, NUTS
 from typing import Tuple, List, Type
-# from tqdm import tqdm
+from tqdm import tqdm
 
 from algorithms.common import ReplayBuffer, EpisodicReplayBuffer
 from algorithms.policy import Policy
@@ -50,16 +50,16 @@ class HybridHMC:
         state = self.env.reset()
         episode_steps: List[Tuple[torch.Tensor, torch.Tensor, float, torch.Tensor, bool]] = []
 
-        for step in range(steps):
+        for step in tqdm(range(steps)):
             # coarse progress tracking
-            if step % 10_000 == 0:
-                print(step)
+            # if step % 10_000 == 0:
+            #     print(step)
             
             if step < start_steps:
                 action = self.random_action()
             else:
                 action = policy.action(state)
-            
+
             next_state, reward, term, trunc, _ = self.env.step(action)
             done = term or trunc
 
