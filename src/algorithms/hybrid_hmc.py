@@ -117,8 +117,7 @@ class HybridHMC:
     def sample_policy(self) -> Policy:
         # this method should return the policy corresponding to a Q function
         # randomly sampled from the posterior estimated by HMC if a posterior
-        # has been estimated, otherwise returns the underlying actor-critic
-        #  exploration policy
+        # has been estimated, otherwise returns the random policy
         if self.q_weight_posterior is None:
             return self.random_policy
         
