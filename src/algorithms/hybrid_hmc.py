@@ -10,6 +10,7 @@ from typing import Tuple, List, Type
 
 from algorithms.common import ReplayBuffer, EpisodicReplayBuffer
 from algorithms.policy import Policy
+from algorithms.random_policy import RandomPolicy
 from algorithms.actor_critic import ActorCritic
 from environments.environment import Environment
 
@@ -42,9 +43,15 @@ class HybridHMC:
             device=device
         )
 
+        self.random_policy = RandomPolicy(
+            env.action_shape(),
+            env.action_min(),
+            env.action_max()
+        )
+
         self.q_weight_posterior = None
 
-    def train(self, steps=100_000, start_steps=10_000, update_after=10_000, update_every=10_000, gamma=0.99):    
+    def train(self, steps=100_000, start_steps=10_000, update_after=10_000, update_every=10_000, gamma=0.99):
         policy = self.sample_policy()
         state = self.env.reset()
         episode_steps: List[Tuple[torch.Tensor, torch.Tensor, float, torch.Tensor, bool]] = []
@@ -55,7 +62,7 @@ class HybridHMC:
                 print(step)
 
             if step < start_steps:
-                action = self.random_action()
+                action = self.random_policy.action(state)
             else:
                 action = policy.action(state)
 
@@ -82,7 +89,6 @@ class HybridHMC:
                 state = self.env.reset() 
             else:
                 state = next_state
-                
 
             # call the actor critic update method
             self.actor_critic.update(step, self.replay_buffer)
@@ -91,12 +97,6 @@ class HybridHMC:
             if step >= update_after and step % update_every == 0:
                 print("updating posterior")
                 self.update_posterior()
-
-    def random_action(self):
-        low = self.env.action_min()
-        high = self.env.action_max()
-        
-        return low + (high - low) * torch.rand(self.env.action_shape(), device=self.device)
 
     def update_posterior(self):
         state, action, _, mc_return, _, _ = self.episodic_replay_buffer.sample(128)
@@ -120,7 +120,7 @@ class HybridHMC:
         # has been estimated, otherwise returns the underlying actor-critic
         #  exploration policy
         if self.q_weight_posterior is None:
-            return self.actor_critic.get_exploration_policy()
+            return self.random_policy
         
         # sample a set of q network parameters from mcmc samples
         idx = jax.random.randint(self.next_rng_key(), shape=(), minval=0, maxval=self.q_weight_posterior['layer1_w'].shape[0])
