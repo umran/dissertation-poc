@@ -39,9 +39,9 @@ class PolicyNetwork(nn.Module):
 def demo():
     ddpg = DDPG(QNetwork, PolicyNetwork)
     mountain_car_env = MountainCar()
-    hybrid_hmc = HybridHMC(mountain_car_env, ddpg)
+    hybrid_hmc = HybridHMC(mountain_car_env, ddpg, PolicyNetwork)
 
-    hybrid_hmc.train(1_000_000)
+    hybrid_hmc.train()
     optimized_policy = ddpg.get_optimal_policy()
 
     demo_env = MountainCar(render_mode="human")
@@ -53,7 +53,7 @@ def demo():
 
         print(action.shape, " ", action)
 
-        next_state, reward, terminated, truncated, _ = demo_env.step(action)
+        next_state, _, terminated, truncated, _ = demo_env.step(action)
         if terminated or truncated:
             state = demo_env.reset()
         else:
