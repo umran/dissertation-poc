@@ -108,7 +108,7 @@ class HybridHMC:
         target = jnp.array(mc_return.cpu().numpy())
 
         kernel = NUTS(q_model)
-        mcmc = MCMC(kernel, num_warmup=500, num_samples=1000, num_chains=4)
+        mcmc = MCMC(kernel, num_warmup=500, num_samples=1000, num_chains=1)
         
         mcmc.run(self.next_rng_key(), state=state, action=action, y=target)
         mcmc.print_summary()
@@ -138,9 +138,9 @@ class HybridHMC:
         
         # instantiate optimizer for policy parameters
         optimizer = optim.Adam(policy_net.parameters(), lr=1e-3)
-        
+
         # sample a batch of states to optimize policy against
-        state, _, _, _, _ = self.replay_buffer.sample(1024)
+        state, _, _, _, _ = self.replay_buffer.sample(2000)
 
         for _ in range(200):
             action = policy_net(state)
@@ -170,8 +170,7 @@ class SampledQNetwork(nn.Module):
         x = torch.cat([state, action], dim=-1)
 
         z1 = torch.relu(torch.matmul(x, self.weights["layer1_w"]) + self.weights["layer1_b"])
-        z2 = torch.relu(torch.matmul(z1, self.weights["layer2_w"]) + self.weights["layer2_b"])
-        out = torch.matmul(z2, self.weights["output_w"]) + self.weights["output_b"]
+        out = torch.matmul(z1, self.weights["output_w"]) + self.weights["output_b"]
        
         return out
 
@@ -183,19 +182,16 @@ class SampledPolicy(Policy):
         with torch.no_grad():
             return self.policy_net(state)    
 
-def q_model(state, action, hidden_sizes=[32, 32], y=None):
+def q_model(state, action, hidden_size=32, y=None):
     x = jnp.concatenate([state, action], axis=-1)
     n, input_dim = x.shape
-    h1_dim, h2_dim = hidden_sizes
+    h1_dim = hidden_size
 
     # First layer
     z1 = relu(ard_linear("layer1", x, input_dim, h1_dim))
 
-    # Second layer
-    z2 = relu(ard_linear("layer2", z1, h1_dim, h2_dim))
-
     # Output layer
-    out = ard_linear("output", z2, h2_dim, 1)
+    out = ard_linear("output", z1, h1_dim, 1)
     assert out.shape == (n, 1)
 
     if y is not None:
