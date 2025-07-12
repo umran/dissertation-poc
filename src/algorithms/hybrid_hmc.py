@@ -14,6 +14,8 @@ from algorithms.random_policy import RandomPolicy
 from algorithms.actor_critic import ActorCritic
 from environments.environment import Environment
 
+numpyro.set_host_device_count(4)
+
 class HybridHMC:
     def __init__(
         self,
@@ -106,7 +108,7 @@ class HybridHMC:
         target = jnp.array(mc_return.cpu().numpy())
 
         kernel = NUTS(q_model)
-        mcmc = MCMC(kernel, num_warmup=500, num_samples=1000, num_chains=1)
+        mcmc = MCMC(kernel, num_warmup=500, num_samples=1000, num_chains=4)
         
         mcmc.run(self.next_rng_key(), state=state, action=action, y=target)
         mcmc.print_summary()
@@ -138,9 +140,9 @@ class HybridHMC:
         optimizer = optim.Adam(policy_net.parameters(), lr=1e-3)
         
         # sample a batch of states to optimize policy against
-        state, _, _, _, _ = self.replay_buffer.sample(128)
+        state, _, _, _, _ = self.replay_buffer.sample(1024)
 
-        for _ in range(20):
+        for _ in range(200):
             action = policy_net(state)
             value = q_net(state, action)
             loss = -value.mean()
