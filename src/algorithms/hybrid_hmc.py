@@ -57,7 +57,7 @@ class HybridHMC:
         self,
         steps=200_000,
         update_after=10_000,
-        update_every=100_000,
+        update_every=50_000,
         gamma=0.99
     ):
         policy = self.sample_policy()
@@ -74,16 +74,16 @@ class HybridHMC:
             done = term or trunc
 
             # append state, action, reward, done, next_state to episode_steps and replay buffer
-            episode_steps.append((state, action, reward, next_state, done))
-            self.replay_buffer.add(state, action, reward, next_state, done)
+            episode_steps.append((state, action, reward, next_state, term))
+            self.replay_buffer.add(state, action, reward, next_state, term)
 
             if done:
                 # we've reached the end of an episode
                 # calculate discounted monte carlo returns per step within the episode and add to episodic_replay_buffer
                 mc_return = 0
-                for (state, action, reward, next_state, done) in reversed(episode_steps):
+                for (state, action, reward, next_state, term) in reversed(episode_steps):
                     mc_return = reward + gamma * mc_return
-                    self.episodic_replay_buffer.add(state, action, reward, mc_return, next_state, done)
+                    self.episodic_replay_buffer.add(state, action, reward, mc_return, next_state, term)
 
                 # reset episode_steps
                 episode_steps = []
@@ -184,11 +184,7 @@ class SampledPolicy(Policy):
     
     def action(self, state: torch.Tensor) -> torch.Tensor:
         with torch.no_grad():
-            action = self.policy_net(state)
-        
-        # noise = sample_gaussian(0.0, 0.2, action.shape, device=action.device)
-        # return action + noise
-        return action
+            return self.policy_net(state)
            
 
 def q_model(state, action, h1_dim=32, y=None):
