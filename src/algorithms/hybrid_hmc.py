@@ -53,7 +53,13 @@ class HybridHMC:
 
         self.q_weight_posterior = None
 
-    def train(self, steps=100_000, update_after=10_000, update_every=50_000, gamma=0.99):
+    def train(
+        self,
+        steps=100_000,
+        update_after=10_000,
+        update_every=50_000,
+        gamma=0.99
+    ):
         policy = self.sample_policy()
         state = self.env.reset()
         episode_steps: List[Tuple[torch.Tensor, torch.Tensor, float, torch.Tensor, bool]] = []
