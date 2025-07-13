@@ -8,7 +8,7 @@ import numpyro.distributions as dist
 from numpyro.infer import MCMC, NUTS
 from typing import Tuple, List, Type
 
-from algorithms.common import ReplayBuffer, EpisodicReplayBuffer
+from algorithms.common import ReplayBuffer, EpisodicReplayBuffer, copy_params, sample_gaussian
 from algorithms.policy import Policy
 from algorithms.random_policy import RandomPolicy
 from algorithms.actor_critic import ActorCritic
@@ -52,13 +52,12 @@ class HybridHMC:
         )
 
         self.q_weight_posterior = None
-        self.policy_nets = [policy_cls().to(device) for _ in range(20)]
 
     def train(
         self,
-        steps=100_000,
+        steps=200_000,
         update_after=10_000,
-        update_every=50_000,
+        update_every=100_000,
         gamma=0.99
     ):
         policy = self.sample_policy()
@@ -136,8 +135,10 @@ class HybridHMC:
         # construct a q network from sampled parameters
         q_net = SampledQNetwork(q_params).to(self.device)
 
-        idx = torch.randint(len(self.policy_nets), (1,)).item()
-        policy_net = self.policy_nets[idx]
+        policy_net = self.policy_cls().to(self.device)
+        optimal_policy_net = self.actor_critic.get_optimal_policy().policy_net
+
+        copy_params(policy_net, optimal_policy_net)
         
         # instantiate optimizer for policy parameters
         optimizer = optim.Adam(policy_net.parameters(), lr=1e-3)
@@ -183,12 +184,16 @@ class SampledPolicy(Policy):
     
     def action(self, state: torch.Tensor) -> torch.Tensor:
         with torch.no_grad():
-            return self.policy_net(state)    
+            action = self.policy_net(state)
+        
+        # noise = sample_gaussian(0.0, 0.2, action.shape, device=action.device)
+        # return action + noise
+        return action
+           
 
-def q_model(state, action, hidden_size=32, y=None):
+def q_model(state, action, h1_dim=32, y=None):
     x = jnp.concatenate([state, action], axis=-1)
     n, input_dim = x.shape
-    h1_dim = hidden_size
 
     # First layer
     z1 = relu(ard_linear("layer1", x, input_dim, h1_dim))
@@ -199,9 +204,9 @@ def q_model(state, action, hidden_size=32, y=None):
 
     if y is not None:
         assert y.shape == (n, 1)
-        sigma_obs = numpyro.sample("sigma_obs", dist.Exponential(1.0))
+        sigma = numpyro.sample("sigma", dist.Gamma(1.0, 1.0))
         with numpyro.plate("data", n):
-            numpyro.sample("y", dist.Normal(out.squeeze(-1), sigma_obs), obs=y.squeeze(-1))
+            numpyro.sample("y", dist.Normal(out.squeeze(-1), sigma), obs=y.squeeze(-1))
 
 def relu(x):
     return jnp.maximum(0, x)
