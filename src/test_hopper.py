@@ -41,7 +41,7 @@ def demo():
     ddpg = DDPG(QNetwork, PolicyNetwork)
     hybrid_hmc = HybridHMC(Hopper(), ddpg, PolicyNetwork)
 
-    hybrid_hmc.train()
+    hybrid_hmc.train(steps=1_000_000)
     optimized_policy = ddpg.get_optimal_policy()
 
     demo_env = Hopper(render_mode="human")
