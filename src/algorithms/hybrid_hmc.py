@@ -6,9 +6,9 @@ import jax.numpy as jnp
 import numpyro
 import numpyro.distributions as dist
 from numpyro.infer import MCMC, NUTS
-from typing import Tuple, List, Type
+from typing import Tuple, List, Type, Optional
 
-from algorithms.common import ReplayBuffer, EpisodicReplayBuffer, copy_params, sample_gaussian
+from algorithms.common import ReplayBuffer, EpisodicReplayBuffer, ObserverType
 from algorithms.policy import Policy
 from algorithms.random_policy import RandomPolicy
 from algorithms.actor_critic import ActorCritic
@@ -24,12 +24,14 @@ class HybridHMC:
         policy_cls: Type[nn.Module],
         rng_key = jax.random.key(0),
         device: torch.device = torch.device("cpu"),
+        observer: Optional[ObserverType] = None,
     ):
         self.env = env
         self.actor_critic = actor_critic
         self.policy_cls = policy_cls
         self.rng_key = rng_key
         self.device = device
+        self.observer = observer
         
         self.replay_buffer = ReplayBuffer(
             1_000_000,
@@ -101,9 +103,18 @@ class HybridHMC:
             if step >= update_after and (step - update_after) % update_every == 0:
                 print("updating posterior")
                 self.update_posterior()
+            
+            if self.observer is not None:
+                self.observer(
+                    step,
+                    self.actor_critic.get_optimal_policy(),
+                    self.replay_buffer,
+                    self.episodic_replay_buffer,
+                    self.q_weight_posterior
+                )
 
     def update_posterior(self):
-        state, action, _, mc_return, _, _ = self.episodic_replay_buffer.sample(128)
+        state, action, _, mc_return, _, _ = self.episodic_replay_buffer.sample(1000)
 
         state = jnp.array(state.cpu().numpy())
         action = jnp.array(action.cpu().numpy())
@@ -124,7 +135,7 @@ class HybridHMC:
         # has been estimated, otherwise returns the random policy
         if self.q_weight_posterior is None:
             return self.random_policy
-        
+
         # sample a set of q network parameters from mcmc samples
         idx = jax.random.randint(self.next_rng_key(), shape=(), minval=0, maxval=self.q_weight_posterior['layer1_w'].shape[0])
         q_params = {
@@ -134,19 +145,18 @@ class HybridHMC:
 
         # construct a q network from sampled parameters
         q_net = SampledQNetwork(q_params).to(self.device)
-
+        
+        # instantiate a new policy net
         policy_net = self.policy_cls().to(self.device)
-        optimal_policy_net = self.actor_critic.get_optimal_policy().policy_net
-
-        copy_params(policy_net, optimal_policy_net)
         
         # instantiate optimizer for policy parameters
         optimizer = optim.Adam(policy_net.parameters(), lr=1e-3)
 
-        # sample a batch of states to optimize policy against
         state, _, _, _, _, _ = self.episodic_replay_buffer.sample(1000)
+        for i in range(100):
+            if i % 10 == 0:
+                state, _, _, _, _, _ = self.episodic_replay_buffer.sample(1000)
 
-        for _ in range(20):
             action = policy_net(state)
             value = q_net(state, action)
             loss = -value.mean()

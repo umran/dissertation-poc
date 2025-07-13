@@ -1,6 +1,14 @@
 import torch
 import torch.nn as nn
-from typing import Tuple, Optional
+
+import jax.numpy as jnp
+import numpy as np
+import matplotlib.pyplot as plt
+from typing import Tuple, Optional, List, Dict, Callable
+
+from algorithms.policy import Policy
+from algorithms.common import ReplayBuffer, EpisodicReplayBuffer
+from environments.environment import Environment
 
 class ReplayBuffer:
     def __init__(self, 
@@ -164,6 +172,67 @@ class EpisodicReplayBuffer:
 
     def __len__(self):
         return self.size
+
+ObserverType = Callable[
+    [int, Policy, ReplayBuffer, EpisodicReplayBuffer, Dict[str, jnp.ndarray]],
+    None
+]
+
+def new_observer(bench_env: Environment, bench_every = 10_000, bench_episodes = 10):
+    bench_results = []
+
+    def observer(
+        step: int,
+        policy: Policy,
+        replay_buffer_: ReplayBuffer,
+        episodic_replay_buffer_: EpisodicReplayBuffer,
+        q_weight_posterior_: Dict[str, jnp.ndarray]
+    ):
+        if step % bench_every == 0:
+            bench_results.append(run_bench(bench_env, policy, bench_episodes))
+
+    return observer, bench_results
+
+def run_bench(env: Environment, policy: Policy, num_episodes: int) -> Dict[str, float]:
+    episode_rewards = np.zeros(num_episodes)
+    
+    for i in range(num_episodes):
+        state = env.reset()
+
+        while True:
+            action = policy.action(state)
+            state, reward, terminated, truncated, _ = env.step(action)
+        
+            episode_rewards[i] += reward
+
+            if terminated or truncated:
+                break
+
+    return {
+        "mean": episode_rewards.mean(),
+        "sd": episode_rewards.std(),
+        "min": episode_rewards.min(),
+        "max": episode_rewards.max()
+    }
+
+def plot_benchmark(results: List[Dict[str, float]], *, label: str = "Policy", color: str = "blue"):
+    means = np.array([r["mean"] for r in results])
+    sds = np.array([r["sd"] for r in results])
+
+    x = np.arange(len(results))
+    ci = 1.96 * sds
+
+    plt.figure(figsize=(8, 5))
+    plt.plot(x, means, label=label, color=color)
+    plt.fill_between(x, means - ci, means + ci, alpha=0.3, color=color, label="95% CI")
+    
+    plt.xlabel("Benchmark run")
+    plt.ylabel("Reward")
+    plt.title("Mean Reward with 95% Confidence Interval")
+    plt.legend()
+    plt.grid(True)
+    plt.tight_layout()
+    plt.show()
 
 def sample_gaussian(
     mean: float,

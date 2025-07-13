@@ -1,6 +1,8 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+
+from algorithms.common import new_observer, plot_benchmark
 from algorithms.ddpg import DDPG
 from algorithms.hybrid_hmc import HybridHMC
 from environments.pendulum import Pendulum
@@ -38,10 +40,14 @@ class PolicyNetwork(nn.Module):
         return action
 
 def demo():
+    observer, bench_results = new_observer(Pendulum())
+
     ddpg = DDPG(QNetwork, PolicyNetwork)
-    hybrid_hmc = HybridHMC(Pendulum(), ddpg, PolicyNetwork)
+    hybrid_hmc = HybridHMC(Pendulum(), ddpg, PolicyNetwork, observer=observer)
 
     hybrid_hmc.train()
+    plot_benchmark(bench_results)
+    
     optimized_policy = ddpg.get_optimal_policy()
 
     demo_env = Pendulum(render_mode="human")
