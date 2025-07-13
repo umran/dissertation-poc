@@ -52,6 +52,7 @@ class HybridHMC:
         )
 
         self.q_weight_posterior = None
+        self.policy_nets = [policy_cls().to(device) for _ in range(20)]
 
     def train(
         self,
@@ -135,8 +136,8 @@ class HybridHMC:
         # construct a q network from sampled parameters
         q_net = SampledQNetwork(q_params).to(self.device)
 
-        # instantiate a new policy
-        policy_net = self.policy_cls().to(self.device)
+        idx = torch.randint(len(self.policy_nets), (1,)).item()
+        policy_net = self.policy_nets[idx]
         
         # instantiate optimizer for policy parameters
         optimizer = optim.Adam(policy_net.parameters(), lr=1e-3)
@@ -144,7 +145,7 @@ class HybridHMC:
         # sample a batch of states to optimize policy against
         state, _, _, _, _, _ = self.episodic_replay_buffer.sample(1000)
 
-        for _ in range(200):
+        for _ in range(20):
             action = policy_net(state)
             value = q_net(state, action)
             loss = -value.mean()
