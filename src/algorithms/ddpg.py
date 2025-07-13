@@ -53,7 +53,7 @@ class DDPG(ActorCritic):
         # define the exploration policy
     
     def update(self, step: int, replay_buffer: ReplayBuffer):
-        if step < self.update_after or step % self.update_every != 0:
+        if step < self.update_after or (step - self.update_after) % self.update_every != 0:
             return
 
         for _ in range(self.update_every):
@@ -106,6 +106,6 @@ class ExplorationPolicy(Policy):
         with torch.no_grad():
             action = self.policy_net(state)
         
-        noise = sample_gaussian(0.0, self.noise, action.shape)
+        noise = sample_gaussian(0.0, self.noise, action.shape, device=action.device)
 
         return action + noise

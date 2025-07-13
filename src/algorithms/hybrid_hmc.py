@@ -53,7 +53,7 @@ class HybridHMC:
 
         self.q_weight_posterior = None
 
-    def train(self, steps=100_000, start_steps=10_000, update_after=10_000, update_every=10_000, gamma=0.99):
+    def train(self, steps=100_000, update_after=10_000, update_every=50_000, gamma=0.99):
         policy = self.sample_policy()
         state = self.env.reset()
         episode_steps: List[Tuple[torch.Tensor, torch.Tensor, float, torch.Tensor, bool]] = []
@@ -63,11 +63,7 @@ class HybridHMC:
             if step % 10_000 == 0:
                 print(step)
 
-            if step < start_steps:
-                action = self.random_policy.action(state)
-            else:
-                action = policy.action(state)
-
+            action = policy.action(state)
             next_state, reward, term, trunc, _ = self.env.step(action)
             done = term or trunc
 
@@ -96,7 +92,7 @@ class HybridHMC:
             self.actor_critic.update(step, self.replay_buffer)
 
             # update posterior
-            if step >= update_after and step % update_every == 0:
+            if step >= update_after and (step - update_after) % update_every == 0:
                 print("updating posterior")
                 self.update_posterior()
 
@@ -140,7 +136,7 @@ class HybridHMC:
         optimizer = optim.Adam(policy_net.parameters(), lr=1e-3)
 
         # sample a batch of states to optimize policy against
-        state, _, _, _, _ = self.replay_buffer.sample(2000)
+        state, _, _, _, _, _ = self.episodic_replay_buffer.sample(1000)
 
         for _ in range(200):
             action = policy_net(state)
