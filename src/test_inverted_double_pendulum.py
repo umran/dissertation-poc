@@ -40,12 +40,13 @@ class PolicyNetwork(nn.Module):
         return action
 
 def demo():
-    observer, bench_results = new_observer(InvertedDoublePendulum())
     ddpg = DDPG(QNetwork, PolicyNetwork)
-    hybrid_hmc = HybridHMC(InvertedDoublePendulum(), ddpg, PolicyNetwork, observer=observer)
+    hybrid_hmc = HybridHMC(InvertedDoublePendulum(), ddpg, PolicyNetwork)
 
-    hybrid_hmc.train()
+    observer, bench_results = new_observer(InvertedDoublePendulum())
+    hybrid_hmc.train(observer=observer)
     plot_benchmark(bench_results)
+
     optimized_policy = ddpg.get_optimal_policy()
 
     demo_env = InvertedDoublePendulum(render_mode="human")

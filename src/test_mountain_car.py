@@ -1,6 +1,8 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+
+from algorithms.common import new_observer, plot_benchmark
 from algorithms.ddpg import DDPG
 from algorithms.hybrid_hmc import HybridHMC
 from environments.mountain_car import MountainCar
@@ -40,7 +42,10 @@ def demo():
     ddpg = DDPG(QNetwork, PolicyNetwork)
     hybrid_hmc = HybridHMC(MountainCar(), ddpg, PolicyNetwork)
 
-    hybrid_hmc.train()
+    observer, bench_results = new_observer(MountainCar())
+    hybrid_hmc.train(observer=observer)
+    plot_benchmark(bench_results)
+    
     optimized_policy = ddpg.get_optimal_policy()
 
     demo_env = MountainCar(render_mode="human")
