@@ -7,7 +7,6 @@ import matplotlib.pyplot as plt
 from typing import Tuple, Optional, List, Dict, Callable
 
 from algorithms.policy import Policy
-from algorithms.common import ReplayBuffer, EpisodicReplayBuffer
 from environments.environment import Environment
 
 class ReplayBuffer:
