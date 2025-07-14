@@ -150,7 +150,7 @@ class HybridHMC:
         policy_net = self.policy_cls().to(self.device)
         
         # instantiate optimizer for policy parameters
-        optimizer = optim.Adam(policy_net.parameters(), lr=1e-3)
+        optimizer = optim.Adam(policy_net.parameters(), lr=1e-2)
 
         state, _, _, _, _, _ = self.episodic_replay_buffer.sample(1000)
         for i in range(100):
