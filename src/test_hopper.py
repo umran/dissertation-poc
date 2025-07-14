@@ -1,6 +1,8 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+
+from algorithms.common import new_observer, plot_benchmark
 from algorithms.ddpg import DDPG
 from algorithms.hybrid_hmc import HybridHMC
 from environments.hopper import Hopper
@@ -38,10 +40,13 @@ class PolicyNetwork(nn.Module):
         return action
 
 def demo():
+    observer, bench_results = new_observer(Hopper())
     ddpg = DDPG(QNetwork, PolicyNetwork)
-    hybrid_hmc = HybridHMC(Hopper(), ddpg, PolicyNetwork)
+    hybrid_hmc = HybridHMC(Hopper(), ddpg, PolicyNetwork, observer=observer)
 
-    hybrid_hmc.train(steps=1_000_000)
+    hybrid_hmc.train()
+    plot_benchmark(bench_results)
+
     optimized_policy = ddpg.get_optimal_policy()
 
     demo_env = Hopper(render_mode="human")
