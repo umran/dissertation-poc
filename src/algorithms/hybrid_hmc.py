@@ -55,7 +55,7 @@ class HybridHMC:
         )
 
         episodic_replay_buffer = EpisodicReplayBuffer(
-            2 * update_every,
+            1_000_000,
             self.env.state_shape(),
             self.env.action_shape(),
             device=self.device
