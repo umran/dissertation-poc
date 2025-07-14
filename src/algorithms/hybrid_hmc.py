@@ -21,31 +21,15 @@ class HybridHMC:
         self,
         env: Environment,
         actor_critic: ActorCritic,
-        policy_cls: Type[nn.Module],
+        policy_net_cls: Type[nn.Module],
         rng_key = jax.random.key(0),
         device: torch.device = torch.device("cpu"),
-        observer: Optional[ObserverType] = None,
     ):
         self.env = env
         self.actor_critic = actor_critic
-        self.policy_cls = policy_cls
+        self.policy_net_cls = policy_net_cls
         self.rng_key = rng_key
         self.device = device
-        self.observer = observer
-        
-        self.replay_buffer = ReplayBuffer(
-            1_000_000,
-            env.state_shape(),
-            env.action_shape(),
-            device=device
-        )
-
-        self.episodic_replay_buffer = EpisodicReplayBuffer(
-            1_000_000,
-            env.state_shape(),
-            env.action_shape(),
-            device=device
-        )
 
         self.random_policy = RandomPolicy(
             env.action_shape(),
@@ -60,9 +44,24 @@ class HybridHMC:
         steps=200_000,
         update_after=10_000,
         update_every=50_000,
-        gamma=0.99
+        gamma=0.99,
+        observer: Optional[ObserverType] = None,
     ):
-        policy = self.sample_policy()
+        replay_buffer = ReplayBuffer(
+            1_000_000,
+            self.env.state_shape(),
+            self.env.action_shape(),
+            device=self.device
+        )
+
+        episodic_replay_buffer = EpisodicReplayBuffer(
+            1_000_000,
+            self.env.state_shape(),
+            self.env.action_shape(),
+            device=self.device
+        )
+
+        policy = self.sample_policy(episodic_replay_buffer)
         state = self.env.reset()
         episode_steps: List[Tuple[torch.Tensor, torch.Tensor, float, torch.Tensor, bool]] = []
 
@@ -77,7 +76,7 @@ class HybridHMC:
 
             # append state, action, reward, done, next_state to episode_steps and replay buffer
             episode_steps.append((state, action, reward, next_state, term))
-            self.replay_buffer.add(state, action, reward, next_state, term)
+            replay_buffer.add(state, action, reward, next_state, term)
 
             if done:
                 # we've reached the end of an episode
@@ -85,36 +84,36 @@ class HybridHMC:
                 mc_return = 0
                 for (state, action, reward, next_state, term) in reversed(episode_steps):
                     mc_return = reward + gamma * mc_return
-                    self.episodic_replay_buffer.add(state, action, reward, mc_return, next_state, term)
+                    episodic_replay_buffer.add(state, action, reward, mc_return, next_state, term)
 
                 # reset episode_steps
                 episode_steps = []
                 # resample policy
-                policy = self.sample_policy()
+                policy = self.sample_policy(episodic_replay_buffer)
                 # get new initial state
-                state = self.env.reset() 
+                state = self.env.reset()
             else:
                 state = next_state
 
             # call the actor critic update method
-            self.actor_critic.update(step, self.replay_buffer)
+            self.actor_critic.update(step, replay_buffer)
 
             # update posterior
             if step >= update_after and (step - update_after) % update_every == 0:
                 print("updating posterior")
-                self.update_posterior()
+                self.update_posterior(episodic_replay_buffer)
             
-            if self.observer is not None:
-                self.observer(
+            if observer is not None:
+                observer(
                     step,
                     self.actor_critic.get_optimal_policy(),
-                    self.replay_buffer,
-                    self.episodic_replay_buffer,
+                    replay_buffer,
+                    episodic_replay_buffer,
                     self.q_weight_posterior
                 )
 
-    def update_posterior(self):
-        state, action, _, mc_return, _, _ = self.episodic_replay_buffer.sample(1000)
+    def update_posterior(self, episodic_replay_buffer: EpisodicReplayBuffer):
+        state, action, _, mc_return, _, _ = episodic_replay_buffer.sample(1000)
 
         state = jnp.array(state.cpu().numpy())
         action = jnp.array(action.cpu().numpy())
@@ -129,7 +128,7 @@ class HybridHMC:
         self.q_weight_posterior = mcmc.get_samples()
         
 
-    def sample_policy(self) -> Policy:
+    def sample_policy(self, episodic_replay_buffer: EpisodicReplayBuffer) -> Policy:
         # this method should return the policy corresponding to a Q function
         # randomly sampled from the posterior estimated by HMC if a posterior
         # has been estimated, otherwise returns the random policy
@@ -147,15 +146,15 @@ class HybridHMC:
         q_net = SampledQNetwork(q_params).to(self.device)
         
         # instantiate a new policy net
-        policy_net = self.policy_cls().to(self.device)
+        policy_net = self.policy_net_cls().to(self.device)
         
         # instantiate optimizer for policy parameters
         optimizer = optim.Adam(policy_net.parameters(), lr=1e-2)
 
-        state, _, _, _, _, _ = self.episodic_replay_buffer.sample(1000)
+        state, _, _, _, _, _ = episodic_replay_buffer.sample(1000)
         for i in range(100):
             if i % 10 == 0:
-                state, _, _, _, _, _ = self.episodic_replay_buffer.sample(1000)
+                state, _, _, _, _, _ = episodic_replay_buffer.sample(1000)
 
             action = policy_net(state)
             value = q_net(state, action)

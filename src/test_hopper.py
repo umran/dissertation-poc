@@ -40,11 +40,11 @@ class PolicyNetwork(nn.Module):
         return action
 
 def demo():
-    observer, bench_results = new_observer(Hopper())
     ddpg = DDPG(QNetwork, PolicyNetwork)
-    hybrid_hmc = HybridHMC(Hopper(), ddpg, PolicyNetwork, observer=observer)
+    hybrid_hmc = HybridHMC(Hopper(), ddpg, PolicyNetwork)
 
-    hybrid_hmc.train()
+    observer, bench_results = new_observer(Hopper())
+    hybrid_hmc.train(observer=observer)
     plot_benchmark(bench_results)
 
     optimized_policy = ddpg.get_optimal_policy()
