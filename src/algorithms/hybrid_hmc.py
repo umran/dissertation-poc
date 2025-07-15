@@ -44,6 +44,7 @@ class HybridHMC:
         steps=200_000,
         update_after=10_000,
         update_every=50_000,
+        update_actor_critic_every=50,
         gamma=0.99,
         observer: Optional[ObserverType] = None,
     ):
@@ -96,7 +97,8 @@ class HybridHMC:
                 state = next_state
 
             # call the actor critic update method
-            self.actor_critic.update(step, replay_buffer)
+            if step % update_actor_critic_every == 0:
+                self.actor_critic.update(replay_buffer, update_actor_critic_every)
 
             # update posterior
             if step >= update_after and (step - update_after) % update_every == 0:
@@ -104,13 +106,7 @@ class HybridHMC:
                 self.update_posterior(episodic_replay_buffer)
             
             if observer is not None:
-                observer(
-                    step,
-                    self.actor_critic.get_optimal_policy(),
-                    replay_buffer,
-                    episodic_replay_buffer,
-                    self.q_weight_posterior
-                )
+                observer(step, self.actor_critic.get_optimal_policy())
 
     def update_posterior(self, episodic_replay_buffer: EpisodicReplayBuffer):
         state, action, _, mc_return, _, _ = episodic_replay_buffer.sample(1000)
