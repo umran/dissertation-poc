@@ -58,8 +58,6 @@ class BootstrappedActorCritic:
             
             if observer is not None:
                 observer(step, self.mean_policy)
-        
-            
 
     def sample_policy(self) -> Policy:
         idx = torch.randint(0, len(self.ensemble), (1,)).item()

@@ -40,8 +40,7 @@ class PolicyNetwork(nn.Module):
         return action
 
 def demo():
-    ensemble = [DDPG(QNetwork, PolicyNetwork) for _ in range(5)]
-    
+    ensemble = [DDPG(QNetwork, PolicyNetwork) for _ in range(5)] 
     bac = BootstrappedActorCritic(Pendulum(), ensemble)
 
     observer, bench_results = new_observer(Pendulum())

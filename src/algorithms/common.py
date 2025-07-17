@@ -1,7 +1,6 @@
 import torch
 import torch.nn as nn
 
-import jax.numpy as jnp
 import numpy as np
 import matplotlib.pyplot as plt
 from typing import Tuple, Optional, List, Dict, Callable
@@ -86,6 +85,90 @@ class ReplayBuffer:
     def __len__(self):
         return self.size
 
+class MaskedReplayBuffer:
+    def __init__(self, 
+        capacity: int,
+        mask_shape: Tuple[int, ...],
+        state_shape: Tuple[int, ...], 
+        action_shape: Tuple[int, ...],
+        state_dtype: torch.dtype = torch.float32, 
+        action_dtype: torch.dtype = torch.float32,
+        device: torch.device = torch.device("cpu")
+    ):
+        self.capacity = capacity
+        self.device = device
+        self.state_dtype = state_dtype
+        self.action_dtype = action_dtype
+        self.ptr = 0
+        self.size = 0
+
+        self.masks = torch.zeros((capacity, *mask_shape), dtype=torch.float32, device=device)
+        self.states = torch.zeros((capacity, *state_shape), dtype=state_dtype, device=device)
+        self.actions = torch.zeros((capacity, *action_shape), dtype=action_dtype, device=device)
+        self.rewards = torch.zeros((capacity, 1), dtype=torch.float32, device=device)
+        self.next_states = torch.zeros((capacity, *state_shape), dtype=state_dtype, device=device)
+        self.dones = torch.zeros((capacity, 1), dtype=torch.bool, device=device)
+
+    def add(self, mask, state, action, reward, next_state, done):
+        self.add_batch(
+            torch.tensor(mask, dtype=torch.float32, device=self.device).view(1, 1),
+            torch.tensor(state, dtype=self.state_dtype, device=self.device).unsqueeze(0),
+            torch.tensor(action, dtype=self.action_dtype, device=self.device).unsqueeze(0),
+            torch.tensor(reward, dtype=torch.float32, device=self.device).view(1, 1),
+            torch.tensor(next_state, dtype=self.state_dtype, device=self.device).unsqueeze(0),
+            torch.tensor(done, dtype=torch.bool, device=self.device).view(1, 1)
+        )
+
+    def add_batch(self, masks, states, actions, rewards, next_states, dones):
+        batch_size = states.shape[0]
+        assert masks.shape == (batch_size, *self.masks.shape[1:])
+        assert states.shape == (batch_size, *self.states.shape[1:])
+        assert actions.shape == (batch_size, *self.actions.shape[1:])
+        assert rewards.shape == (batch_size, 1)
+        assert next_states.shape == (batch_size, *self.next_states.shape[1:])
+        assert dones.shape == (batch_size, 1)
+
+        end = self.ptr + batch_size
+        if end <= self.capacity:
+            self.masks[self.ptr:end] = masks
+            self.states[self.ptr:end] = states
+            self.actions[self.ptr:end] = actions
+            self.rewards[self.ptr:end] = rewards
+            self.next_states[self.ptr:end] = next_states
+            self.dones[self.ptr:end] = dones
+        else:
+            first = self.capacity - self.ptr
+            second = batch_size - first
+            self.masks[self.ptr:] = masks[:first]
+            self.states[self.ptr:] = states[:first]
+            self.actions[self.ptr:] = actions[:first]
+            self.rewards[self.ptr:] = rewards[:first]
+            self.next_states[self.ptr:] = next_states[:first]
+            self.dones[self.ptr:] = dones[:first]
+
+            self.masks[:second] = masks[first:]
+            self.states[:second] = states[first:]
+            self.actions[:second] = actions[first:]
+            self.rewards[:second] = rewards[first:]
+            self.next_states[:second] = next_states[first:]
+            self.dones[:second] = dones[first:]
+
+        self.ptr = (self.ptr + batch_size) % self.capacity
+        self.size = min(self.size + batch_size, self.capacity)
+
+    def sample(self, batch_size):
+        idx = torch.randint(0, self.size, (batch_size,), device=self.device)
+        return (
+            self.masks[idx],
+            self.states[idx],
+            self.actions[idx],
+            self.rewards[idx],
+            self.next_states[idx],
+            self.dones[idx]
+        )
+
+    def __len__(self):
+        return self.size
 
 class EpisodicReplayBuffer:
     def __init__(
@@ -171,6 +254,68 @@ class EpisodicReplayBuffer:
 
     def __len__(self):
         return self.size
+    
+class MultiHeadQNetwork(nn.Module):
+    def __init__(self, state_dim: int, action_dim: int, num_heads: int):
+        super(MultiHeadQNetwork, self).__init__()
+
+        self.shared = nn.Sequential(
+            nn.Linear(state_dim + action_dim, 32),
+            nn.ReLU(),
+            nn.Linear(32, 32),
+            nn.ReLU()
+        )
+
+        self.heads = nn.ModuleList(
+            [nn.Linear(32, 1) for _ in range(num_heads)]
+        )
+    
+    def forward(self, state, action):
+        x = torch.cat([state, action], dim=-1)
+        shared = self.shared(x)
+
+        return torch.cat([head(shared) for head in self.heads], dim=1)
+
+class MultiHeadPolicyNetwork(nn.Module):
+    def __init__(
+        self,
+        state_dim: int,
+        action_dim: int,
+        action_min: torch.Tensor,
+        action_max: torch.Tensor,
+        num_heads: int
+    ):
+        super(MultiHeadPolicyNetwork, self).__init__()
+
+        assert action_min.shape == (action_dim,)
+        assert action_max.shape == (action_dim,)
+
+        self.action_min = action_min
+        self.action_max = action_max
+
+        self.shared = nn.Sequential(
+            nn.Linear(state_dim, 32),
+            nn.ReLU(),
+            nn.Linear(32, 32),
+            nn.ReLU()
+        )
+
+        self.heads = nn.ModuleList(
+            [nn.Linear(32, action_dim) for _ in range(num_heads)]
+        )
+
+    def forward(self, state):
+        shared = self.shared(state)
+        head_outputs = [torch.tanh(head(shared)) for head in self.heads]
+        stacked = torch.stack(head_outputs, dim=1)
+
+        # Scale to [action_min, action_max]
+        # Reshape bounds for broadcasting
+        action_min = self.action_min.view(1, 1, -1)
+        action_max = self.action_max.view(1, 1, -1)
+
+        scaled = 0.5 * (stacked + 1.0) * (action_max - action_min) + action_min
+        return scaled
 
 ObserverType = Callable[
     [int, Policy],

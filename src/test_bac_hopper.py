@@ -41,10 +41,10 @@ class PolicyNetwork(nn.Module):
 
 def demo():
     ensemble = [DDPG(QNetwork, PolicyNetwork) for _ in range(10)] 
-    bac = BootstrappedActorCritic(Hopper(), ensemble, p_mask=0.5)
+    bac = BootstrappedActorCritic(Hopper(), ensemble, p_mask=0.9)
 
     observer, bench_results = new_observer(Hopper())
-    bac.train(start_steps=0, steps=100_000, observer=observer)
+    bac.train(start_steps=10_000, steps=1_000_000, observer=observer)
     plot_benchmark(bench_results)
     
     optimized_policy = bac.get_mean_policy()

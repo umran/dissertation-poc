@@ -1,11 +1,11 @@
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from typing import Type
+from typing import Type, Tuple
 
 from algorithms.actor_critic import ActorCritic
 from algorithms.policy import Policy
-from algorithms.common import ReplayBuffer, copy_params, polyak_update, sample_gaussian
+from algorithms.common import ReplayBuffer, MultiHeadQNetwork, MultiHeadPolicyNetwork, copy_params, polyak_update, sample_gaussian
 
 class DDPG(ActorCritic):
     def __init__(
@@ -105,3 +105,36 @@ class ExplorationPolicy(Policy):
         noise = sample_gaussian(0.0, self.noise, action.shape, device=action.device)
 
         return action + noise
+    
+class MultiHeadDDPG(ActorCritic):
+    def __init__(
+        self,
+        num_heads: int,
+        state_shape: Tuple[int, ...],
+        action_shape: Tuple[int, ...],
+        action_min: torch.Tensor,
+        action_max: torch.Tensor,
+        batch_size: int = 128,
+        gamma: float = 0.99,
+        polyak: float = 0.995,
+        q_lr: float = 1e-4,
+        policy_lr: float = 1e-4,
+        device: torch.device = torch.device("cpu")
+    ):
+        state_dim = state_shape[0]
+        action_dim = action_shape[0]
+
+        self.q = MultiHeadQNetwork(state_dim, action_dim, num_heads).to(device)
+        self.q_target = MultiHeadQNetwork(state_dim, action_dim, num_heads).to(device)
+        self.policy = MultiHeadPolicyNetwork(state_dim, action_dim, action_min, action_max, num_heads).to(device)
+        self.policy_target = MultiHeadPolicyNetwork(state_dim, action_dim, action_min, action_max, num_heads).to(device)
+
+        # initially set parameters of the target networks 
+        # to those from the actual networks
+        copy_params(self.q_target, self.q)
+        copy_params(self.policy_target, self.policy)
+
+
+        self.batch_size = batch_size
+        self.gamma = gamma
+        self.polyak = polyak
