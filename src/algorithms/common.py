@@ -173,7 +173,7 @@ class EpisodicReplayBuffer:
         return self.size
 
 ObserverType = Callable[
-    [int, Policy, ReplayBuffer, EpisodicReplayBuffer, Dict[str, jnp.ndarray]],
+    [int, Policy],
     None
 ]
 
@@ -182,10 +182,7 @@ def new_observer(bench_env: Environment, bench_every = 10_000, bench_episodes = 
 
     def observer(
         step: int,
-        policy: Policy,
-        replay_buffer_: ReplayBuffer,
-        episodic_replay_buffer_: EpisodicReplayBuffer,
-        q_weight_posterior_: Dict[str, jnp.ndarray]
+        policy: Policy
     ):
         if step % bench_every == 0:
             bench_results.append(run_bench(bench_env, policy, bench_episodes))
