@@ -6,9 +6,9 @@ import jax.numpy as jnp
 import numpyro
 import numpyro.distributions as dist
 from numpyro.infer import MCMC, NUTS
-from typing import Tuple, List, Type, Optional
+from typing import Type, Optional
 
-from algorithms.common import ReplayBuffer, EpisodicReplayBuffer, ObserverType
+from algorithms.common import ReplayBuffer, ObserverType
 from algorithms.policy import Policy
 from algorithms.random_policy import RandomPolicy
 from algorithms.actor_critic import ActorCritic
@@ -55,16 +55,8 @@ class HybridHMC:
             device=self.device
         )
 
-        episodic_replay_buffer = EpisodicReplayBuffer(
-            1_000_000,
-            self.env.state_shape(),
-            self.env.action_shape(),
-            device=self.device
-        )
-
-        policy = self.sample_policy(episodic_replay_buffer)
+        policy = self.sample_policy(replay_buffer)
         state = self.env.reset()
-        episode_steps: List[Tuple[torch.Tensor, torch.Tensor, float, torch.Tensor, bool]] = []
 
         for step in range(steps):
             # coarse progress tracking
@@ -75,22 +67,12 @@ class HybridHMC:
             next_state, reward, term, trunc, _ = self.env.step(action)
             done = term or trunc
 
-            # append state, action, reward, done, next_state to episode_steps and replay buffer
-            episode_steps.append((state, action, reward, next_state, term))
+            # append state, action, reward, done, next_state to the replay buffer
             replay_buffer.add(state, action, reward, next_state, term)
 
             if done:
-                # we've reached the end of an episode
-                # calculate discounted monte carlo returns per step within the episode and add to episodic_replay_buffer
-                mc_return = 0
-                for (state, action, reward, next_state, term) in reversed(episode_steps):
-                    mc_return = reward + gamma * mc_return
-                    episodic_replay_buffer.add(state, action, reward, mc_return, next_state, term)
-
-                # reset episode_steps
-                episode_steps = []
                 # resample policy
-                policy = self.sample_policy(episodic_replay_buffer)
+                policy = self.sample_policy(replay_buffer)
                 # get new initial state
                 state = self.env.reset()
             else:
@@ -103,28 +85,31 @@ class HybridHMC:
             # update posterior
             if step >= update_after and (step - update_after) % update_every == 0:
                 print("updating posterior")
-                self.update_posterior(episodic_replay_buffer)
+                self.update_posterior(replay_buffer, gamma)
             
             if observer is not None:
                 observer(step, self.actor_critic.get_optimal_policy())
 
-    def update_posterior(self, episodic_replay_buffer: EpisodicReplayBuffer):
-        state, action, _, mc_return, _, _ = episodic_replay_buffer.sample(1000)
+    def update_posterior(self, replay_buffer: ReplayBuffer, gamma: float):
+        state, action, reward, next_state, term = replay_buffer.sample(1000)
+
+        # compute td_target
+        td_target = self.actor_critic.compute_td_target(next_state, reward, term)
 
         state = jnp.array(state.cpu().numpy())
         action = jnp.array(action.cpu().numpy())
-        target = jnp.array(mc_return.cpu().numpy())
+        td_target = jnp.array(td_target.cpu().numpy())
 
         kernel = NUTS(q_model)
         mcmc = MCMC(kernel, num_warmup=500, num_samples=1000, num_chains=1)
         
-        mcmc.run(self.next_rng_key(), state=state, action=action, y=target)
+        mcmc.run(self.next_rng_key(), state=state, action=action, td_target=td_target)
         mcmc.print_summary()
         
         self.q_weight_posterior = mcmc.get_samples()
         
 
-    def sample_policy(self, episodic_replay_buffer: EpisodicReplayBuffer) -> Policy:
+    def sample_policy(self, replay_buffer: ReplayBuffer) -> Policy:
         # this method should return the policy corresponding to a Q function
         # randomly sampled from the posterior estimated by HMC if a posterior
         # has been estimated, otherwise returns the random policy
@@ -147,10 +132,10 @@ class HybridHMC:
         # instantiate optimizer for policy parameters
         optimizer = optim.Adam(policy_net.parameters(), lr=1e-2)
 
-        state, _, _, _, _, _ = episodic_replay_buffer.sample(1000)
-        for i in range(100):
-            if i % 10 == 0:
-                state, _, _, _, _, _ = episodic_replay_buffer.sample(1000)
+        state, _, _, _, _ = replay_buffer.sample(1000)
+        for i in range(20):
+            if i % 5 == 0:
+                state, _, _, _, _ = replay_buffer.sample(1000)
 
             action = policy_net(state)
             value = q_net(state, action)
@@ -192,32 +177,36 @@ class SampledPolicy(Policy):
             return self.policy_net(state)
            
 
-def q_model(state, action, h1_dim=32, y=None):
-    x = jnp.concatenate([state, action], axis=-1)
-    n, input_dim = x.shape
+def q_model(state, action, td_target, h1_dim=32):
+    batch_size, state_dim = state.shape
+    _, action_dim = action.shape
+    input_dim = state_dim + action_dim
 
     # First layer
-    z1 = relu(ard_linear("layer1", x, input_dim, h1_dim))
+    z1_w, z1_b = ard_linear("layer1", input_dim, h1_dim)
 
     # Output layer
-    out = ard_linear("output", z1, h1_dim, 1)
-    assert out.shape == (n, 1)
+    out_w, out_b = ard_linear("output", h1_dim, 1)
+    
+    def q_fn(x):
+        z1 = relu(jnp.dot(x, z1_w) + z1_b)
+        return jnp.dot(z1, out_w) + out_b
 
-    if y is not None:
-        assert y.shape == (n, 1)
-        sigma = numpyro.sample("sigma", dist.Gamma(1.0, 1.0))
-        with numpyro.plate("data", n):
-            numpyro.sample("y", dist.Normal(out.squeeze(-1), sigma), obs=y.squeeze(-1))
+    x = jnp.concatenate([state, action], axis=-1)
+    q = q_fn(x)
+
+    sigma = numpyro.sample("sigma", dist.Gamma(1.0, 1.0))
+    with numpyro.plate("data", batch_size):
+        numpyro.sample("y", dist.Normal(q.squeeze(-1), sigma), obs=td_target.squeeze(-1))
 
 def relu(x):
     return jnp.maximum(0, x)
 
-def ard_linear(name, x, in_dim, out_dim):
-    # ARD: log-precision for each weight and bias
+def ard_linear(name, in_dim, out_dim):
     weight_scale = numpyro.sample(f"{name}_weight_scale", dist.Gamma(1.0, 1.0).expand([in_dim, out_dim]))
     bias_scale = numpyro.sample(f"{name}_bias_scale", dist.Gamma(1.0, 1.0).expand([out_dim]))
 
     w = numpyro.sample(f"{name}_w", dist.Normal(0., 1. / jnp.sqrt(weight_scale)))
     b = numpyro.sample(f"{name}_b", dist.Normal(0., 1. / jnp.sqrt(bias_scale)))
 
-    return jnp.dot(x, w) + b
+    return w, b

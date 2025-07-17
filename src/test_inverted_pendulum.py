@@ -44,7 +44,7 @@ def demo():
     hybrid_hmc = HybridHMC(InvertedPendulum(), ddpg, PolicyNetwork)
 
     observer, bench_results = new_observer(InvertedPendulum())
-    hybrid_hmc.train(observer=observer)
+    hybrid_hmc.train(steps=200_000, update_after=50_000, update_every=20_000, observer=observer)
     plot_benchmark(bench_results)
 
     optimized_policy = ddpg.get_optimal_policy()

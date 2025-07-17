@@ -79,6 +79,10 @@ class DDPG(ActorCritic):
             polyak_update(self.q_target, self.q, self.polyak)
             polyak_update(self.policy_target, self.policy, self.polyak)
 
+    def compute_td_target(self, next_state: torch.Tensor, reward: torch.Tensor, term: torch.Tensor):
+        with torch.no_grad():
+            return reward + self.gamma * (1 - term.to(torch.float32)) * self.q_target(next_state, self.policy_target(next_state))
+
     def get_optimal_policy(self) -> Policy:
         return self.optimal_policy
 
