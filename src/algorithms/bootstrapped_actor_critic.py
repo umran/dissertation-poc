@@ -9,19 +9,20 @@ from algorithms.policy import Policy
 from algorithms.random_policy import RandomPolicy
 
 class BootstrappedActorCritic:
-    def __init__(self, env: Environment, ensemble: List[ActorCritic], p_mask: float = 0.5, device: torch.device = torch.device("cpu")):
+    def __init__(self, env: Environment, ensemble: List[ActorCritic], device: torch.device = torch.device("cpu")):
         self.env = env
         self.ensemble = ensemble
         self.mean_policy = MeanPolicy(ensemble, device)
         self.random_policy = RandomPolicy(env.action_shape(), env.action_min(), env.action_max())
-        self.p_mask = p_mask
         self.device = device
 
     def train(
         self,
-        steps: int = 100_000,
+        p_mask: float,
+        steps: int = 200_000,
         start_steps: int = 10_000,
         update_every: int = 50,
+        gamma: float = 0.99,
         observer: Optional[ObserverType] = None
     ):
         replay_buffers = [ReplayBuffer(1_000_000, self.env.state_shape(), self.env.action_shape()) for _ in range(len(self.ensemble))]
@@ -38,7 +39,7 @@ class BootstrappedActorCritic:
             next_state, reward, term, trunc, _ = self.env.step(action)
             done = term or trunc
 
-            mask = torch.bernoulli(torch.full((len(self.ensemble), 1), self.p_mask))
+            mask = torch.bernoulli(torch.full((len(self.ensemble), 1), p_mask))
             for i in range(len(self.ensemble)):
                 if mask[i].item() == 1:
                     replay_buffers[i].add(state, action, reward, next_state, term)
@@ -54,7 +55,7 @@ class BootstrappedActorCritic:
 
             if step % update_every == 0:
                 for i, actor in enumerate(self.ensemble):
-                    actor.update(replay_buffers[i], update_every)
+                    actor.update(replay_buffers[i], update_every, gamma)
             
             if observer is not None:
                 observer(step, self.mean_policy)
@@ -76,9 +77,6 @@ class MeanPolicy(Policy):
         self.device = device
     
     def action(self, state) -> torch.Tensor:
-        # action = torch.tensor([actor.get_optimal_policy().action(state) for actor in self.ensemble], device=self.device)
-        # return action.mean()
-
         action_list = [actor.get_optimal_policy().action(state) for actor in self.ensemble]
         action_tensor = torch.stack(action_list, dim=0).to(self.device)
         return action_tensor.mean(dim=0)

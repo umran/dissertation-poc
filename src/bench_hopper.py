@@ -40,7 +40,7 @@ class PolicyNetwork(nn.Module):
         
         return action
 
-def bench():
+def bench_hopper():
     random_ddpg = VanillaActorCritic(Hopper(), DDPG(QNetwork, PolicyNetwork))
     random_ddpg_observer, random_ddpg_results = new_observer(Hopper())
     random_ddpg.train(start_steps=200_000, observer=random_ddpg_observer)
@@ -62,4 +62,8 @@ def bench():
         colors=["red", "blue", "green"]
     )
 
-bench()
+    return [
+        random_ddpg.actor_critic.get_optimal_policy(),
+        vanilla_ddpg.actor_critic.get_optimal_policy(),
+        hybrid_hmc.actor_critic.get_optimal_policy()
+    ]
