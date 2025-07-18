@@ -1,7 +1,6 @@
 import torch
 import torch.nn as nn
 
-import jax.numpy as jnp
 import numpy as np
 import matplotlib.pyplot as plt
 from typing import Tuple, Optional, List, Dict, Callable
@@ -185,7 +184,9 @@ def new_observer(bench_env: Environment, bench_every = 10_000, bench_episodes = 
         policy: Policy
     ):
         if step % bench_every == 0:
-            bench_results.append(run_bench(bench_env, policy, bench_episodes))
+            results = run_bench(bench_env, policy, bench_episodes)
+            results["step"] = step
+            bench_results.append(results)
 
     return observer, bench_results
 
@@ -212,19 +213,43 @@ def run_bench(env: Environment, policy: Policy, num_episodes: int) -> Dict[str, 
     }
 
 def plot_benchmark(results: List[Dict[str, float]], *, label: str = "Policy", color: str = "blue"):
+    steps = np.array([r["step"] for r in results])
     means = np.array([r["mean"] for r in results])
     sds = np.array([r["sd"] for r in results])
-
-    x = np.arange(len(results))
-    ci = 1.96 * sds
+    ci = 1.96 * sds  # 95% confidence interval
 
     plt.figure(figsize=(8, 5))
-    plt.plot(x, means, label=label, color=color)
-    plt.fill_between(x, means - ci, means + ci, alpha=0.3, color=color, label="95% CI")
-    
-    plt.xlabel("Benchmark run")
-    plt.ylabel("Reward")
-    plt.title("Mean Reward with 95% Confidence Interval")
+    plt.plot(steps, means, label=label, color=color)
+    plt.fill_between(steps, means - ci, means + ci, alpha=0.3, color=color, label="95% CI")
+
+    plt.xlabel("Step")
+    plt.ylabel("Cumulative Reward")
+    plt.title("Performance")
+    plt.legend()
+    plt.grid(True)
+    plt.tight_layout()
+    plt.show()
+
+def plot_multiple_benchmarks(
+    benchmark_sets: List[Tuple[List[Dict[str, float]], str]],  # (results, label)
+    colors: List[str] = None
+):
+    plt.figure(figsize=(10, 6))
+
+    for i, (results, label) in enumerate(benchmark_sets):
+        steps = np.array([r["step"] for r in results])
+        means = np.array([r["mean"] for r in results])
+        sds = np.array([r["sd"] for r in results])
+        ci = 1.96 * sds
+
+        color = colors[i] if colors is not None and i < len(colors) else None
+
+        plt.plot(steps, means, label=label, color=color)
+        plt.fill_between(steps, means - ci, means + ci, alpha=0.2, color=color, linewidth=0)
+
+    plt.xlabel("Step")
+    plt.ylabel("Cumulative Reward")
+    plt.title("Performance")
     plt.legend()
     plt.grid(True)
     plt.tight_layout()
