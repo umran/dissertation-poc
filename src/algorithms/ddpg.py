@@ -13,7 +13,6 @@ class DDPG(ActorCritic):
         q_cls: Type[nn.Module],
         policy_cls: Type[nn.Module],
         batch_size: int = 128,
-        gamma: float = 0.99,
         polyak: float = 0.995,
         q_lr: float = 1e-4,
         policy_lr: float = 1e-4,
@@ -32,7 +31,6 @@ class DDPG(ActorCritic):
 
 
         self.batch_size = batch_size
-        self.gamma = gamma
         self.polyak = polyak
 
         # initialize optimizers for the q and policy networks
@@ -48,7 +46,7 @@ class DDPG(ActorCritic):
 
         # define the exploration policy
     
-    def update(self, replay_buffer: ReplayBuffer, steps: int):
+    def update(self, replay_buffer: ReplayBuffer, steps: int, gamma: float):
         if len(replay_buffer) == 0:
             return
 
@@ -56,7 +54,7 @@ class DDPG(ActorCritic):
             state, action, reward, next_state, done = replay_buffer.sample(self.batch_size)
 
             with torch.no_grad():
-                target = reward + self.gamma * (1 - done.to(torch.float32)) * self.q_target(next_state, self.policy_target(next_state))
+                target = reward + gamma * (1 - done.to(torch.float32)) * self.q_target(next_state, self.policy_target(next_state))
             
             # do a gradient descent update of the
             # q network to minimize the MSBE loss

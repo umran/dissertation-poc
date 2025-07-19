@@ -98,7 +98,7 @@ class HybridHMC:
 
             # call the actor critic update method
             if step % update_actor_critic_every == 0:
-                self.actor_critic.update(replay_buffer, update_actor_critic_every)
+                self.actor_critic.update(replay_buffer, update_actor_critic_every, gamma)
 
             # update posterior
             if step >= update_after and (step - update_after) % update_every == 0:

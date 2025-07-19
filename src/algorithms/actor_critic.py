@@ -5,7 +5,7 @@ from algorithms.policy import Policy
 
 class ActorCritic(ABC):
     @abstractmethod
-    def update(self, replay_buffer: ReplayBuffer, steps: int):
+    def update(self, replay_buffer: ReplayBuffer, steps: int, gamma: float):
         pass
 
     @abstractmethod
