@@ -8,7 +8,7 @@ import numpyro.distributions as dist
 from numpyro.infer import MCMC, NUTS
 from typing import Tuple, List, Type, Optional
 
-from algorithms.common import ReplayBuffer, EpisodicReplayBuffer, ObserverType
+from algorithms.common import ReplayBuffer, ObserverType,  TrajectoryQueue
 from algorithms.policy import Policy
 from algorithms.random_policy import RandomPolicy
 from algorithms.actor_critic import ActorCritic
@@ -44,6 +44,7 @@ class HybridHMC:
         steps=200_000,
         update_after=10_000,
         update_every=50_000,
+        num_trajectories=5,
         update_actor_critic_every=50,
         gamma=0.99,
         observer: Optional[ObserverType] = None,
@@ -55,16 +56,14 @@ class HybridHMC:
             device=self.device
         )
 
-        episodic_replay_buffer = EpisodicReplayBuffer(
-            1_000_000,
-            self.env.state_shape(),
-            self.env.action_shape(),
-            device=self.device
-        )
+        trajectory_queue = TrajectoryQueue()
 
-        policy = self.sample_policy(episodic_replay_buffer)
+        policy = self.sample_policy(trajectory_queue)
         state = self.env.reset()
         episode_steps: List[Tuple[torch.Tensor, torch.Tensor, float, torch.Tensor, bool]] = []
+
+        episode = 0
+        policy_trajectories = []
 
         for step in range(steps):
             # coarse progress tracking
@@ -83,16 +82,29 @@ class HybridHMC:
                 # we've reached the end of an episode
                 # calculate discounted monte carlo returns per step within the episode and add to episodic_replay_buffer
                 mc_return = 0
+                trajectory = []
                 for (state, action, reward, next_state, term) in reversed(episode_steps):
                     mc_return = reward + gamma * mc_return
-                    episodic_replay_buffer.add(state, action, reward, mc_return, next_state, term)
+                    trajectory.append((state, action, mc_return))
 
+                # append trajectory to policy trajectories
+                policy_trajectories.append(trajectory)
+                
                 # reset episode_steps
                 episode_steps = []
-                # resample policy
-                policy = self.sample_policy(episodic_replay_buffer)
+
                 # get new initial state
                 state = self.env.reset()
+
+                if episode % num_trajectories == 0:
+                    # add policy_trajectories to trajectory queue
+                    trajectory_queue.add(policy_trajectories)
+                    policy_trajectories = []
+
+                    # resample policy
+                    policy = self.sample_policy(replay_buffer)
+
+                episode += 1
             else:
                 state = next_state
 
@@ -103,13 +115,18 @@ class HybridHMC:
             # update posterior
             if step >= update_after and (step - update_after) % update_every == 0:
                 print("updating posterior")
-                self.update_posterior(episodic_replay_buffer)
+                self.update_posterior(trajectory_queue)
             
             if observer is not None:
                 observer(step, self.actor_critic.get_optimal_policy())
 
-    def update_posterior(self, episodic_replay_buffer: EpisodicReplayBuffer):
-        state, action, _, mc_return, _, _ = episodic_replay_buffer.sample(1000)
+    def update_posterior(self, trajectory_queue: TrajectoryQueue):
+        trajectories = trajectory_queue.sample(1.0)
+
+        # debugging
+        print(trajectories)
+
+        state, action, mc_return = flatten_trajectories(trajectories)
 
         state = jnp.array(state.cpu().numpy())
         action = jnp.array(action.cpu().numpy())
@@ -124,7 +141,7 @@ class HybridHMC:
         self.q_weight_posterior = mcmc.get_samples()
         
 
-    def sample_policy(self, episodic_replay_buffer: EpisodicReplayBuffer) -> Policy:
+    def sample_policy(self, replay_buffer: ReplayBuffer) -> Policy:
         # this method should return the policy corresponding to a Q function
         # randomly sampled from the posterior estimated by HMC if a posterior
         # has been estimated, otherwise returns the random policy
@@ -147,10 +164,10 @@ class HybridHMC:
         # instantiate optimizer for policy parameters
         optimizer = optim.Adam(policy_net.parameters(), lr=1e-2)
 
-        state, _, _, _, _, _ = episodic_replay_buffer.sample(1000)
+        state, _, _, _, _ = replay_buffer.sample(1000)
         for i in range(100):
             if i % 10 == 0:
-                state, _, _, _, _, _ = episodic_replay_buffer.sample(1000)
+                state, _, _, _, _ = replay_buffer.sample(1000)
 
             action = policy_net(state)
             value = q_net(state, action)
@@ -221,3 +238,20 @@ def ard_linear(name, x, in_dim, out_dim):
     b = numpyro.sample(f"{name}_b", dist.Normal(0., 1. / jnp.sqrt(bias_scale)))
 
     return jnp.dot(x, w) + b
+
+def flatten_trajectories(trajectories):
+    all_states = []
+    all_actions = []
+    all_mc_returns = []
+
+    for traj in trajectories:
+        states, actions, mc_returns = zip(*traj)
+        all_states.extend(states)
+        all_actions.extend(actions)
+        all_mc_returns.extend(mc_returns)
+
+    states = torch.stack(all_states)         # (N, state_dim)
+    actions = torch.stack(all_actions)       # (N, action_dim)
+    mc_returns = torch.stack(all_mc_returns).unsqueeze(1)  # (N, 1)
+
+    return states, actions, mc_returns

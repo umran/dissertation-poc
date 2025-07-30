@@ -8,6 +8,43 @@ from typing import Tuple, Optional, List, Dict, Callable
 from algorithms.policy import Policy
 from environments.environment import Environment
 
+import bisect
+
+class QueueItem:
+    def __init__(self, trajectories):
+        self.trajectories = trajectories
+        self.total_return = sum(
+            step[2].item()
+            for traj in trajectories
+            for step in traj
+        )
+
+    def __lt__(self, other):
+        return self.total_return < other.total_return
+
+class TrajectoryQueue:
+    def __init__(self):
+        self.queue = []  # sorted list of QueueItem objects
+
+    def add(self, trajectories):
+        item = QueueItem(trajectories)
+        bisect.insort(self.queue, item)
+
+    def sample(self, tau: float):
+        if not self.queue:
+            return None
+
+        if torch.rand(1).item() < tau:
+            return self.queue.pop().trajectories  # highest-return
+        else:
+            idx = torch.randint(0, len(self.queue), (1,)).item()
+            return self.queue.pop(idx).trajectories
+
+    def __len__(self):
+        return len(self.queue)
+
+
+
 class ReplayBuffer:
     def __init__(self, 
         capacity: int,
