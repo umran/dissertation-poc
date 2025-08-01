@@ -3,7 +3,7 @@ from tqdm import tqdm
 from typing import List, Optional
 
 from environments.environment import Environment
-from algorithms.common import ReplayBuffer, ObserverType
+from algorithms.common import ReplayBuffer, ObserverType, PolicyNetwork
 from algorithms.actor_critic import ActorCritic
 from algorithms.policy import Policy
 from algorithms.random_policy import RandomPolicy
@@ -80,3 +80,6 @@ class MeanPolicy(Policy):
         action_list = [actor.get_optimal_policy().action(state) for actor in self.ensemble]
         action_tensor = torch.stack(action_list, dim=0).to(self.device)
         return action_tensor.mean(dim=0)
+    
+    def get_policy_net(self) -> Optional[PolicyNetwork]:
+        return None

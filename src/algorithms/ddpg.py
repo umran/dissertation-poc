@@ -1,17 +1,17 @@
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from typing import Type
+from typing import Optional
 
 from algorithms.actor_critic import ActorCritic
 from algorithms.policy import Policy
-from algorithms.common import ReplayBuffer, copy_params, polyak_update, sample_gaussian
+from algorithms.common import QNetwork, PolicyNetwork, ReplayBuffer, copy_params, polyak_update, sample_gaussian
+from environments.environment import Environment
 
 class DDPG(ActorCritic):
     def __init__(
         self,
-        q_cls: Type[nn.Module],
-        policy_cls: Type[nn.Module],
+        env: Environment,
         batch_size: int = 128,
         polyak: float = 0.995,
         q_lr: float = 1e-4,
@@ -19,32 +19,37 @@ class DDPG(ActorCritic):
         exploration_noise: float = 0.2,
         device: torch.device = torch.device("cpu")
     ):
-        self.q = q_cls().to(device)
-        self.q_target = q_cls().to(device)
-        self.policy = policy_cls().to(device)
-        self.policy_target = policy_cls().to(device)
+        state_shape = env.state_shape()
+        action_shape = env.action_shape()
+        action_min = env.action_min()
+        action_max = env.action_max()
+
+        self.q_net = QNetwork(state_shape[0], action_shape[0]).to(device)
+        self.q_net_target = QNetwork(state_shape[0], action_shape[0]).to(device)
+        self.policy_net = PolicyNetwork(state_shape[0], action_shape[0], action_min, action_max).to(device)
+        self.policy_net_target = PolicyNetwork(state_shape[0], action_shape[0], action_min, action_max).to(device)
 
         # initially set parameters of the target networks 
         # to those from the actual networks
-        copy_params(self.q_target, self.q)
-        copy_params(self.policy_target, self.policy)
+        copy_params(self.q_net_target, self.q_net)
+        copy_params(self.policy_net_target, self.policy_net)
 
 
         self.batch_size = batch_size
         self.polyak = polyak
 
         # initialize optimizers for the q and policy networks
-        self.q_optimizer = optim.Adam(self.q.parameters(), lr=q_lr)
-        self.policy_optimizer = optim.Adam(self.policy.parameters(), lr=policy_lr)
+        self.q_optimizer = optim.Adam(self.q_net.parameters(), lr=q_lr)
+        self.policy_optimizer = optim.Adam(self.policy_net.parameters(), lr=policy_lr)
 
         # define the loss function
         self.loss = nn.MSELoss()
 
         # define the optimal policy
-        self.optimal_policy = OptimalPolicy(self.policy)
-        self.exploration_policy = ExplorationPolicy(self.policy, exploration_noise)
-
+        self.optimal_policy = OptimalPolicy(self.policy_net)
+        
         # define the exploration policy
+        self.exploration_policy = ExplorationPolicy(self.policy_net, exploration_noise)
     
     def update(self, replay_buffer: ReplayBuffer, steps: int, gamma: float):
         if len(replay_buffer) == 0:
@@ -54,11 +59,11 @@ class DDPG(ActorCritic):
             state, action, reward, next_state, done = replay_buffer.sample(self.batch_size)
 
             with torch.no_grad():
-                target = reward + gamma * (1 - done.to(torch.float32)) * self.q_target(next_state, self.policy_target(next_state))
+                target = reward + gamma * (1 - done.to(torch.float32)) * self.q_net_target(next_state, self.policy_net_target(next_state))
             
             # do a gradient descent update of the
             # q network to minimize the MSBE loss
-            predicted = self.q(state, action)
+            predicted = self.q_net(state, action)
             q_loss = self.loss(predicted, target)
 
             self.q_optimizer.zero_grad()
@@ -67,15 +72,15 @@ class DDPG(ActorCritic):
 
             # do a gradient ascent update of the policy
             # network to maximize the average state-action value
-            policy_loss = -1 * self.q(state, self.policy(state)).mean()
+            policy_loss = -1 * self.q_net(state, self.policy_net(state)).mean()
             
             self.policy_optimizer.zero_grad()
             policy_loss.backward()
             self.policy_optimizer.step()
 
             # shift target networks forward
-            polyak_update(self.q_target, self.q, self.polyak)
-            polyak_update(self.policy_target, self.policy, self.polyak)
+            polyak_update(self.q_net_target, self.q_net, self.polyak)
+            polyak_update(self.policy_net_target, self.policy_net, self.polyak)
 
     def get_optimal_policy(self) -> Policy:
         return self.optimal_policy
@@ -90,6 +95,9 @@ class OptimalPolicy(Policy):
     def action(self, state: torch.Tensor) -> torch.Tensor:
         with torch.no_grad():
             return self.policy_net(state)
+    
+    def get_policy_net(self) -> Optional[PolicyNetwork]:
+        return self.policy_net
 
 class ExplorationPolicy(Policy):
     def __init__(self, policy_net: nn.Module, noise: float):
@@ -103,3 +111,6 @@ class ExplorationPolicy(Policy):
         noise = sample_gaussian(0.0, self.noise, action.shape, device=action.device)
 
         return action + noise
+    
+    def get_policy_net(self) -> Optional[PolicyNetwork]:
+        return None

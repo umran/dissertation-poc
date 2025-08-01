@@ -8,7 +8,7 @@ import numpyro.distributions as dist
 from numpyro.infer import MCMC, NUTS
 from typing import Tuple, List, Type, Optional
 
-from algorithms.common import ReplayBuffer, EpisodicReplayBuffer, ObserverType
+from algorithms.common import ReplayBuffer, EpisodicReplayBuffer, ObserverType, QNetwork, PolicyNetwork, copy_params
 from algorithms.policy import Policy
 from algorithms.random_policy import RandomPolicy
 from algorithms.actor_critic import ActorCritic
@@ -21,13 +21,11 @@ class HybridHMC:
         self,
         env: Environment,
         actor_critic: ActorCritic,
-        policy_net_cls: Type[nn.Module],
         rng_key = jax.random.key(0),
         device: torch.device = torch.device("cpu"),
     ):
         self.env = env
         self.actor_critic = actor_critic
-        self.policy_net_cls = policy_net_cls
         self.rng_key = rng_key
         self.device = device
 
@@ -37,6 +35,7 @@ class HybridHMC:
             env.action_max()
         )
 
+        self.exploration_policy_net = None
         self.q_weight_posterior = None
 
     def train(
@@ -123,6 +122,20 @@ class HybridHMC:
         
         self.q_weight_posterior = mcmc.get_samples()
         
+        # instantiate a new policy net
+        self.exploration_policy_net = PolicyNetwork(
+            self.env.state_shape[0],
+            self.env.action_shape[0],
+            self.env.action_min(),
+            self.env.action_max()
+        ).to(self.device)
+
+        # copy params from the current actor critic optimal policy to the exploration policy
+        copy_params(
+            self.exploration_policy_net,
+            self.actor_critic.get_optimal_policy().get_policy_net()
+        )
+        
 
     def sample_policy(self, episodic_replay_buffer: EpisodicReplayBuffer) -> Policy:
         # this method should return the policy corresponding to a Q function
@@ -141,18 +154,15 @@ class HybridHMC:
         # construct a q network from sampled parameters
         q_net = SampledQNetwork(q_params).to(self.device)
         
-        # instantiate a new policy net
-        policy_net = self.policy_net_cls().to(self.device)
-        
         # instantiate optimizer for policy parameters
-        optimizer = optim.Adam(policy_net.parameters(), lr=1e-2)
+        optimizer = optim.Adam(self.exploration_policy_net.parameters(), lr=1e-2)
 
         state, _, _, _, _, _ = episodic_replay_buffer.sample(1000)
         for i in range(100):
             if i % 10 == 0:
                 state, _, _, _, _, _ = episodic_replay_buffer.sample(1000)
 
-            action = policy_net(state)
+            action = self.exploration_policy_net(state)
             value = q_net(state, action)
             loss = -value.mean()
 
@@ -160,7 +170,7 @@ class HybridHMC:
             loss.backward()
             optimizer.step()
         
-        return SampledPolicy(policy_net)
+        return SampledPolicy(self.exploration_policy_net)
 
     def next_rng_key(self):
         self.rng_key, subkey = jax.random.split(self.rng_key)
