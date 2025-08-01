@@ -47,6 +47,15 @@ class PolicyNetwork(nn.Module):
             nn.ReLU(),
             nn.Linear(32, action_dim)
         )
+    
+    def forward(self, state):
+        raw = torch.tanh(self.core(state))
+
+        action_min = self.action_min
+        action_max = self.action_max
+
+        scaled = 0.5 * (raw + 1.0) * (action_max - action_min) + action_min
+        return scaled
 
 class ReplayBuffer:
     def __init__(self, 
