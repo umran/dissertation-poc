@@ -5,7 +5,8 @@ from typing import Optional
 
 from algorithms.actor_critic import ActorCritic
 from algorithms.policy import Policy
-from algorithms.common import QNetwork, PolicyNetwork, ReplayBuffer, copy_params, polyak_update, sample_gaussian
+from algorithms.common import ReplayBuffer, copy_params, polyak_update, sample_gaussian
+from algorithms.networks import QNetwork, PolicyNetwork
 from environments.environment import Environment
 
 class DDPG(ActorCritic):
@@ -87,6 +88,9 @@ class DDPG(ActorCritic):
 
     def get_exploration_policy(self) -> Policy:
         return self.exploration_policy
+    
+    def get_critic_network(self):
+        return self.q_net
 
 class OptimalPolicy(Policy):
     def __init__(self, policy_net: nn.Module):

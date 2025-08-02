@@ -6,9 +6,10 @@ import jax.numpy as jnp
 import numpyro
 import numpyro.distributions as dist
 from numpyro.infer import MCMC, NUTS
-from typing import Tuple, List, Type, Optional
+from typing import Tuple, List, Optional
 
-from algorithms.common import ReplayBuffer, EpisodicReplayBuffer, ObserverType, QNetwork, PolicyNetwork, copy_params
+from algorithms.common import ReplayBuffer, EpisodicReplayBuffer, ObserverType, copy_params
+from algorithms.networks import PolicyNetwork, QNetwork
 from algorithms.policy import Policy
 from algorithms.random_policy import RandomPolicy
 from algorithms.actor_critic import ActorCritic
@@ -35,14 +36,13 @@ class HybridHMC:
             env.action_max()
         )
 
-        self.exploration_policy_net = None
         self.q_weight_posterior = None
 
     def train(
         self,
         steps=200_000,
         update_after=10_000,
-        update_every=50_000,
+        update_every=10_000,
         update_actor_critic_every=50,
         gamma=0.99,
         observer: Optional[ObserverType] = None,
@@ -114,27 +114,17 @@ class HybridHMC:
         action = jnp.array(action.cpu().numpy())
         target = jnp.array(mc_return.cpu().numpy())
 
+        prior_params = None
+        if self.q_weight_posterior is not None:
+            prior_params = extract_qnetwork_params(self.actor_critic.get_critic_network())
+
         kernel = NUTS(q_model)
         mcmc = MCMC(kernel, num_warmup=500, num_samples=1000, num_chains=1)
         
-        mcmc.run(self.next_rng_key(), state=state, action=action, y=target)
+        mcmc.run(self.next_rng_key(), state=state, action=action, y=target, prior_params=prior_params)
         mcmc.print_summary()
         
         self.q_weight_posterior = mcmc.get_samples()
-        
-        # instantiate a new policy net
-        self.exploration_policy_net = PolicyNetwork(
-            self.env.state_shape[0],
-            self.env.action_shape[0],
-            self.env.action_min(),
-            self.env.action_max()
-        ).to(self.device)
-
-        # copy params from the current actor critic optimal policy to the exploration policy
-        copy_params(
-            self.exploration_policy_net,
-            self.actor_critic.get_optimal_policy().get_policy_net()
-        )
         
 
     def sample_policy(self, episodic_replay_buffer: EpisodicReplayBuffer) -> Policy:
@@ -154,15 +144,23 @@ class HybridHMC:
         # construct a q network from sampled parameters
         q_net = SampledQNetwork(q_params).to(self.device)
         
+        # instantiate a new policy
+        policy_net = PolicyNetwork(
+            self.env.state_shape()[0],
+            self.env.action_shape()[0],
+            self.env.action_min(),
+            self.env.action_max()
+        ).to(self.device)
+
         # instantiate optimizer for policy parameters
-        optimizer = optim.Adam(self.exploration_policy_net.parameters(), lr=1e-2)
+        optimizer = optim.Adam(policy_net.parameters(), lr=1e-2)
 
         state, _, _, _, _, _ = episodic_replay_buffer.sample(1000)
         for i in range(100):
             if i % 10 == 0:
                 state, _, _, _, _, _ = episodic_replay_buffer.sample(1000)
 
-            action = self.exploration_policy_net(state)
+            action = policy_net(state)
             value = q_net(state, action)
             loss = -value.mean()
 
@@ -170,7 +168,7 @@ class HybridHMC:
             loss.backward()
             optimizer.step()
         
-        return SampledPolicy(self.exploration_policy_net)
+        return SampledPolicy(policy_net)
 
     def next_rng_key(self):
         self.rng_key, subkey = jax.random.split(self.rng_key)
@@ -200,17 +198,20 @@ class SampledPolicy(Policy):
     def action(self, state: torch.Tensor) -> torch.Tensor:
         with torch.no_grad():
             return self.policy_net(state)
-           
+    
+    def get_policy_net(self) -> Optional[PolicyNetwork]:
+        return None
 
-def q_model(state, action, h1_dim=32, y=None):
+def q_model(state, action, h1_dim=64, y=None, prior_params=None):
     x = jnp.concatenate([state, action], axis=-1)
     n, input_dim = x.shape
 
-    # First layer
-    z1 = relu(ard_linear("layer1", x, input_dim, h1_dim))
+    z1 = relu(ard_linear("layer1", x, input_dim, h1_dim,
+                         prior=prior_params["layer1"] if prior_params else None))
 
-    # Output layer
-    out = ard_linear("output", z1, h1_dim, 1)
+    out = ard_linear("output", z1, h1_dim, 1,
+                     prior=prior_params["output"] if prior_params else None)
+    
     assert out.shape == (n, 1)
 
     if y is not None:
@@ -219,15 +220,39 @@ def q_model(state, action, h1_dim=32, y=None):
         with numpyro.plate("data", n):
             numpyro.sample("y", dist.Normal(out.squeeze(-1), sigma), obs=y.squeeze(-1))
 
+
 def relu(x):
     return jnp.maximum(0, x)
 
-def ard_linear(name, x, in_dim, out_dim):
-    # ARD: log-precision for each weight and bias
+def ard_linear(name, x, in_dim, out_dim, prior=None):
     weight_scale = numpyro.sample(f"{name}_weight_scale", dist.Gamma(1.0, 1.0).expand([in_dim, out_dim]))
     bias_scale = numpyro.sample(f"{name}_bias_scale", dist.Gamma(1.0, 1.0).expand([out_dim]))
 
-    w = numpyro.sample(f"{name}_w", dist.Normal(0., 1. / jnp.sqrt(weight_scale)))
-    b = numpyro.sample(f"{name}_b", dist.Normal(0., 1. / jnp.sqrt(bias_scale)))
+    if prior:
+        weight_mu = jnp.asarray(prior["w"])
+        bias_mu = jnp.asarray(prior["b"])
+    else:
+        weight_mu = 0.0
+        bias_mu = 0.0
+
+    w = numpyro.sample(f"{name}_w", dist.Normal(loc=weight_mu, scale=1. / jnp.sqrt(weight_scale)))
+    b = numpyro.sample(f"{name}_b", dist.Normal(loc=bias_mu, scale=1. / jnp.sqrt(bias_scale)))
 
     return jnp.dot(x, w) + b
+
+def extract_qnetwork_params(q_model: QNetwork):
+    param_dict = {
+        name: param.clone().detach().cpu().numpy()
+        for name, param in q_model.named_parameters()
+    }
+
+    return {
+        "layer1": {
+            "w": param_dict['core.0.weight'].T,  # Transpose to [in, out] for JAX
+            "b": param_dict['core.0.bias'],
+        },
+        "output": {
+            "w": param_dict['core.2.weight'].T,
+            "b": param_dict['core.2.bias'],
+        },
+    }

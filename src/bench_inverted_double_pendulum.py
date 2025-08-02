@@ -15,7 +15,7 @@ def bench_inverted_double_pendulum():
 
     hybrid_hmc = HybridHMC(InvertedDoublePendulum(), DDPG(InvertedDoublePendulum()))
     hybrid_hmc_observer, hybrid_hmc_results = new_observer(InvertedDoublePendulum())
-    hybrid_hmc.train(observer=hybrid_hmc_observer)
+    hybrid_hmc.train(update_every=10_000, observer=hybrid_hmc_observer)
 
     plot_multiple_benchmarks(
         [

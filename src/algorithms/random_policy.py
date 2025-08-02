@@ -2,7 +2,7 @@ import torch
 from typing import Tuple, Optional
 
 from algorithms.policy import Policy
-from algorithms.common import PolicyNetwork
+from algorithms.networks import PolicyNetwork
 
 class RandomPolicy(Policy):
     def __init__(self, action_shape: Tuple[int, ...], action_min: torch.Tensor, action_max: torch.Tensor):
