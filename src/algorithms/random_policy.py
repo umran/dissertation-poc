@@ -16,6 +16,3 @@ class RandomPolicy(Policy):
         rand_shape = batch_shape + self.action_shape
 
         return self.action_min + self.action_range * torch.rand(rand_shape, dtype=torch.float32, device=self.action_min.device)
-
-    def get_policy_net(self) -> Optional[PolicyNetwork]:
-        return None

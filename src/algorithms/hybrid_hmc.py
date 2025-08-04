@@ -37,12 +37,13 @@ class HybridHMC:
         )
 
         self.q_weight_posterior = None
+        self.exploration_policy_net = None
 
     def train(
         self,
         steps=200_000,
         update_after=10_000,
-        update_every=10_000,
+        update_every=5_000,
         update_actor_critic_every=50,
         gamma=0.99,
         observer: Optional[ObserverType] = None,
@@ -63,7 +64,7 @@ class HybridHMC:
 
         policy = self.sample_policy(episodic_replay_buffer)
         state = self.env.reset()
-        episode_steps: List[Tuple[torch.Tensor, torch.Tensor, float, torch.Tensor, bool]] = []
+        episode_steps: List[Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]] = []
 
         for step in range(steps):
             # coarse progress tracking
@@ -108,7 +109,8 @@ class HybridHMC:
                 observer(step, self.actor_critic.get_optimal_policy())
 
     def update_posterior(self, episodic_replay_buffer: EpisodicReplayBuffer):
-        state, action, _, mc_return, _, _ = episodic_replay_buffer.sample(1000)
+        q_net = self.actor_critic.get_critic_network()
+        state, action, _, mc_return, _, _ = episodic_replay_buffer.sample_per(q_net, 1000)
 
         state = jnp.array(state.cpu().numpy())
         action = jnp.array(action.cpu().numpy())
@@ -116,7 +118,7 @@ class HybridHMC:
 
         prior_params = None
         if self.q_weight_posterior is not None:
-            prior_params = extract_qnetwork_params(self.actor_critic.get_critic_network())
+            prior_params = extract_qnetwork_params(q_net)
 
         kernel = NUTS(q_model)
         mcmc = MCMC(kernel, num_warmup=500, num_samples=1000, num_chains=1)
@@ -125,6 +127,16 @@ class HybridHMC:
         mcmc.print_summary()
         
         self.q_weight_posterior = mcmc.get_samples()
+        
+        # instantiate a new policy
+        self.exploration_policy_net = PolicyNetwork(
+            self.env.state_shape()[0],
+            self.env.action_shape()[0],
+            self.env.action_min(),
+            self.env.action_max()
+        ).to(self.device)
+
+        copy_params(self.exploration_policy_net, self.actor_critic.get_actor_network())
         
 
     def sample_policy(self, episodic_replay_buffer: EpisodicReplayBuffer) -> Policy:
@@ -143,24 +155,13 @@ class HybridHMC:
 
         # construct a q network from sampled parameters
         q_net = SampledQNetwork(q_params).to(self.device)
-        
-        # instantiate a new policy
-        policy_net = PolicyNetwork(
-            self.env.state_shape()[0],
-            self.env.action_shape()[0],
-            self.env.action_min(),
-            self.env.action_max()
-        ).to(self.device)
 
         # instantiate optimizer for policy parameters
-        optimizer = optim.Adam(policy_net.parameters(), lr=1e-2)
+        optimizer = optim.Adam(self.exploration_policy_net.parameters(), lr=1e-2)
 
-        state, _, _, _, _, _ = episodic_replay_buffer.sample(1000)
-        for i in range(100):
-            if i % 10 == 0:
-                state, _, _, _, _, _ = episodic_replay_buffer.sample(1000)
-
-            action = policy_net(state)
+        state, _, _, _, _, _ = episodic_replay_buffer.sample_per(q_net, 1000)
+        for _ in range(100):
+            action = self.exploration_policy_net(state)
             value = q_net(state, action)
             loss = -value.mean()
 
@@ -168,7 +169,7 @@ class HybridHMC:
             loss.backward()
             optimizer.step()
         
-        return SampledPolicy(policy_net)
+        return SampledPolicy(self.exploration_policy_net)
 
     def next_rng_key(self):
         self.rng_key, subkey = jax.random.split(self.rng_key)
@@ -198,18 +199,15 @@ class SampledPolicy(Policy):
     def action(self, state: torch.Tensor) -> torch.Tensor:
         with torch.no_grad():
             return self.policy_net(state)
-    
-    def get_policy_net(self) -> Optional[PolicyNetwork]:
-        return None
 
-def q_model(state, action, h1_dim=64, y=None, prior_params=None):
+def q_model(state, action, y=None, prior_params=None, h1_dim=32):
     x = jnp.concatenate([state, action], axis=-1)
     n, input_dim = x.shape
 
-    z1 = relu(ard_linear("layer1", x, input_dim, h1_dim,
+    z1 = relu(linear("layer1", x, input_dim, h1_dim,
                          prior=prior_params["layer1"] if prior_params else None))
 
-    out = ard_linear("output", z1, h1_dim, 1,
+    out = linear("output", z1, h1_dim, 1,
                      prior=prior_params["output"] if prior_params else None)
     
     assert out.shape == (n, 1)
@@ -224,16 +222,24 @@ def q_model(state, action, h1_dim=64, y=None, prior_params=None):
 def relu(x):
     return jnp.maximum(0, x)
 
-def ard_linear(name, x, in_dim, out_dim, prior=None):
-    weight_scale = numpyro.sample(f"{name}_weight_scale", dist.Gamma(1.0, 1.0).expand([in_dim, out_dim]))
-    bias_scale = numpyro.sample(f"{name}_bias_scale", dist.Gamma(1.0, 1.0).expand([out_dim]))
+def linear(name, x, in_dim, out_dim, prior=None):
+    weight_scale = numpyro.sample(f"{name}_weight_scale", dist.Gamma(1.0, 1.0)) #.expand([in_dim, out_dim]))
+    bias_scale = numpyro.sample(f"{name}_bias_scale", dist.Gamma(1.0, 1.0)) #.expand([out_dim]))
 
     if prior:
         weight_mu = jnp.asarray(prior["w"])
         bias_mu = jnp.asarray(prior["b"])
+        
+        # Check prior shapes
+        assert weight_mu.shape == (in_dim, out_dim), (
+            f"Expected prior['w'] to have shape {(in_dim, out_dim)}, got {weight_mu.shape}"
+        )
+        assert bias_mu.shape == (out_dim,), (
+            f"Expected prior['b'] to have shape ({out_dim},), got {bias_mu.shape}"
+        )
     else:
-        weight_mu = 0.0
-        bias_mu = 0.0
+        weight_mu = jnp.zeros((in_dim, out_dim))
+        bias_mu = jnp.zeros((out_dim,))
 
     w = numpyro.sample(f"{name}_w", dist.Normal(loc=weight_mu, scale=1. / jnp.sqrt(weight_scale)))
     b = numpyro.sample(f"{name}_b", dist.Normal(loc=bias_mu, scale=1. / jnp.sqrt(bias_scale)))

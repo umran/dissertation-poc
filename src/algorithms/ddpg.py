@@ -89,8 +89,11 @@ class DDPG(ActorCritic):
     def get_exploration_policy(self) -> Policy:
         return self.exploration_policy
     
-    def get_critic_network(self):
+    def get_critic_network(self) -> QNetwork:
         return self.q_net
+    
+    def get_actor_network(self) -> PolicyNetwork:
+        return self.policy_net
 
 class OptimalPolicy(Policy):
     def __init__(self, policy_net: nn.Module):
@@ -99,9 +102,6 @@ class OptimalPolicy(Policy):
     def action(self, state: torch.Tensor) -> torch.Tensor:
         with torch.no_grad():
             return self.policy_net(state)
-    
-    def get_policy_net(self) -> Optional[PolicyNetwork]:
-        return self.policy_net
 
 class ExplorationPolicy(Policy):
     def __init__(self, policy_net: nn.Module, noise: float):
@@ -115,6 +115,3 @@ class ExplorationPolicy(Policy):
         noise = sample_gaussian(0.0, self.noise, action.shape, device=action.device)
 
         return action + noise
-    
-    def get_policy_net(self) -> Optional[PolicyNetwork]:
-        return None

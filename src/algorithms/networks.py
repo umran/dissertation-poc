@@ -6,11 +6,11 @@ class QNetwork(nn.Module):
         super(QNetwork, self).__init__()
 
         self.core = nn.Sequential(
-            nn.Linear(state_dim + action_dim, 64),
+            nn.Linear(state_dim + action_dim, 32),
             nn.ReLU(),
             # nn.Linear(32, 32),
-            # # nn.ReLU(),
-            nn.Linear(64, 1)
+            # nn.ReLU(),
+            nn.Linear(32, 1)
         )
     
     def forward(self, state, action):

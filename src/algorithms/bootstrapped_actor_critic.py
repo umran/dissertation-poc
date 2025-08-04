@@ -81,6 +81,3 @@ class MeanPolicy(Policy):
         action_list = [actor.get_optimal_policy().action(state) for actor in self.ensemble]
         action_tensor = torch.stack(action_list, dim=0).to(self.device)
         return action_tensor.mean(dim=0)
-    
-    def get_policy_net(self) -> Optional[PolicyNetwork]:
-        return None

@@ -6,6 +6,7 @@ import matplotlib.pyplot as plt
 from typing import Tuple, Optional, List, Dict, Callable
 
 from algorithms.policy import Policy
+from algorithms.networks import QNetwork
 from environments.environment import Environment
 
 class ReplayBuffer:
@@ -28,24 +29,24 @@ class ReplayBuffer:
         self.actions = torch.zeros((capacity, *action_shape), dtype=action_dtype, device=device)
         self.rewards = torch.zeros((capacity, 1), dtype=torch.float32, device=device)
         self.next_states = torch.zeros((capacity, *state_shape), dtype=state_dtype, device=device)
-        self.dones = torch.zeros((capacity, 1), dtype=torch.bool, device=device)
+        self.terms = torch.zeros((capacity, 1), dtype=torch.bool, device=device)
 
-    def add(self, state, action, reward, next_state, done):
+    def add(self, state, action, reward, next_state, term):
         self.add_batch(
-            torch.tensor(state, dtype=self.state_dtype, device=self.device).unsqueeze(0),
-            torch.tensor(action, dtype=self.action_dtype, device=self.device).unsqueeze(0),
-            torch.tensor(reward, dtype=torch.float32, device=self.device).view(1, 1),
-            torch.tensor(next_state, dtype=self.state_dtype, device=self.device).unsqueeze(0),
-            torch.tensor(done, dtype=torch.bool, device=self.device).view(1, 1)
+            state.unsqueeze(0),
+            action.unsqueeze(0),
+            reward.view(1, 1),
+            next_state.unsqueeze(0),
+            term.view(1, 1)
         )
 
-    def add_batch(self, states, actions, rewards, next_states, dones):
+    def add_batch(self, states, actions, rewards, next_states, terms):
         batch_size = states.shape[0]
         assert states.shape == (batch_size, *self.states.shape[1:])
         assert actions.shape == (batch_size, *self.actions.shape[1:])
         assert rewards.shape == (batch_size, 1)
         assert next_states.shape == (batch_size, *self.next_states.shape[1:])
-        assert dones.shape == (batch_size, 1)
+        assert terms.shape == (batch_size, 1)
 
         end = self.ptr + batch_size
         if end <= self.capacity:
@@ -53,7 +54,7 @@ class ReplayBuffer:
             self.actions[self.ptr:end] = actions
             self.rewards[self.ptr:end] = rewards
             self.next_states[self.ptr:end] = next_states
-            self.dones[self.ptr:end] = dones
+            self.terms[self.ptr:end] = terms
         else:
             first = self.capacity - self.ptr
             second = batch_size - first
@@ -61,13 +62,13 @@ class ReplayBuffer:
             self.actions[self.ptr:] = actions[:first]
             self.rewards[self.ptr:] = rewards[:first]
             self.next_states[self.ptr:] = next_states[:first]
-            self.dones[self.ptr:] = dones[:first]
+            self.terms[self.ptr:] = terms[:first]
 
             self.states[:second] = states[first:]
             self.actions[:second] = actions[first:]
             self.rewards[:second] = rewards[first:]
             self.next_states[:second] = next_states[first:]
-            self.dones[:second] = dones[first:]
+            self.terms[:second] = terms[first:]
 
         self.ptr = (self.ptr + batch_size) % self.capacity
         self.size = min(self.size + batch_size, self.capacity)
@@ -79,7 +80,7 @@ class ReplayBuffer:
             self.actions[idx],
             self.rewards[idx],
             self.next_states[idx],
-            self.dones[idx]
+            self.terms[idx]
         )
 
     def __len__(self):
@@ -108,26 +109,26 @@ class EpisodicReplayBuffer:
         self.rewards = torch.zeros((capacity, 1), dtype=torch.float32, device=device)
         self.mc_returns = torch.zeros((capacity, 1), dtype=torch.float32, device=device)
         self.next_states = torch.zeros((capacity, *state_shape), dtype=state_dtype, device=device)
-        self.dones = torch.zeros((capacity, 1), dtype=torch.bool, device=device)
+        self.terms = torch.zeros((capacity, 1), dtype=torch.bool, device=device)
 
-    def add(self, state, action, reward, mc_return, next_state, done):
+    def add(self, state, action, reward, mc_return, next_state, term):
         self.add_batch(
-            torch.tensor(state, dtype=self.state_dtype, device=self.device).unsqueeze(0),
-            torch.tensor(action, dtype=self.action_dtype, device=self.device).unsqueeze(0),
-            torch.tensor(reward, dtype=torch.float32, device=self.device).view(1, 1),
-            torch.tensor(mc_return, dtype=torch.float32, device=self.device).view(1, 1),
-            torch.tensor(next_state, dtype=self.state_dtype, device=self.device).unsqueeze(0),
-            torch.tensor(done, dtype=torch.bool, device=self.device).view(1, 1)
+            state.unsqueeze(0),
+            action.unsqueeze(0),
+            reward.view(1, 1),
+            mc_return.view(1, 1),
+            next_state.unsqueeze(0),
+            term.view(1, 1),
         )
 
-    def add_batch(self, states, actions, rewards, mc_returns, next_states, dones):
+    def add_batch(self, states, actions, rewards, mc_returns, next_states, terms):
         batch_size = states.shape[0]
         assert states.shape == (batch_size, *self.states.shape[1:])
         assert actions.shape == (batch_size, *self.actions.shape[1:])
         assert rewards.shape == (batch_size, 1)
         assert mc_returns.shape == (batch_size, 1)
         assert next_states.shape == (batch_size, *self.next_states.shape[1:])
-        assert dones.shape == (batch_size, 1)
+        assert terms.shape == (batch_size, 1)
 
         end = self.ptr + batch_size
         if end <= self.capacity:
@@ -136,7 +137,7 @@ class EpisodicReplayBuffer:
             self.rewards[self.ptr:end] = rewards
             self.mc_returns[self.ptr:end] = mc_returns
             self.next_states[self.ptr:end] = next_states
-            self.dones[self.ptr:end] = dones
+            self.terms[self.ptr:end] = terms
         else:
             first = self.capacity - self.ptr
             second = batch_size - first
@@ -145,14 +146,14 @@ class EpisodicReplayBuffer:
             self.rewards[self.ptr:] = rewards[:first]
             self.mc_returns[self.ptr:] = mc_returns[:first]
             self.next_states[self.ptr:] = next_states[:first]
-            self.dones[self.ptr:] = dones[:first]
+            self.terms[self.ptr:] = terms[:first]
 
             self.states[:second] = states[first:]
             self.actions[:second] = actions[first:]
             self.rewards[:second] = rewards[first:]
             self.mc_returns[:second] = mc_returns[first:]
             self.next_states[:second] = next_states[first:]
-            self.dones[:second] = dones[first:]
+            self.terms[:second] = terms[first:]
 
         self.ptr = (self.ptr + batch_size) % self.capacity
         self.size = min(self.size + batch_size, self.capacity)
@@ -165,7 +166,40 @@ class EpisodicReplayBuffer:
             self.rewards[idx],
             self.mc_returns[idx],
             self.next_states[idx],
-            self.dones[idx]
+            self.terms[idx]
+        )
+    
+    def sample_per(self, q_net: QNetwork, batch_size: int):
+        if self.size == 0:
+            raise ValueError("Cannot sample from empty buffer")
+        
+        # Step 1: Compute disagreement scores
+        delta = compute_disagreement(q_net, self.states[:self.size], self.actions[:self.size], self.mc_returns[:self.size])
+
+        # Sort transitions by error in descending order
+        sorted_indices = torch.argsort(delta, descending=True)
+
+        # Stratified sampling: divide into k segments of equal probability mass
+        segment_size = self.size // batch_size
+        sample_indices = []
+
+        for i in range(batch_size):
+            start = i * segment_size
+            end = (i + 1) * segment_size if i < batch_size - 1 else self.size
+            if end > start:
+                segment = sorted_indices[start:end]
+                rand_idx = torch.randint(len(segment), (1,)).item()
+                sample_indices.append(segment[rand_idx])
+
+        idx = torch.tensor(sample_indices, dtype=torch.int32)
+
+        return (
+            self.states[idx],
+            self.actions[idx],
+            self.rewards[idx],
+            self.mc_returns[idx],
+            self.next_states[idx],
+            self.terms[idx]
         )
 
     def __len__(self):
@@ -211,24 +245,6 @@ def run_bench(env: Environment, policy: Policy, num_episodes: int) -> Dict[str, 
         "min": episode_rewards.min(),
         "max": episode_rewards.max()
     }
-
-def plot_benchmark(results: List[Dict[str, float]], *, label: str = "Policy", color: str = "blue"):
-    steps = np.array([r["step"] for r in results])
-    means = np.array([r["mean"] for r in results])
-    sds = np.array([r["sd"] for r in results])
-    ci = 1.96 * sds  # 95% confidence interval
-
-    plt.figure(figsize=(8, 5))
-    plt.plot(steps, means, label=label, color=color)
-    plt.fill_between(steps, means - ci, means + ci, alpha=0.3, color=color, label="95% CI")
-
-    plt.xlabel("Step")
-    plt.ylabel("Cumulative Reward")
-    plt.title("Performance")
-    plt.legend()
-    plt.grid(True)
-    plt.tight_layout()
-    plt.show()
 
 def plot_multiple_benchmarks(
     benchmark_sets: List[Tuple[List[Dict[str, float]], str]],  # (results, label)
@@ -279,3 +295,37 @@ def copy_params(target_net: nn.Module, source_net: nn.Module):
 def polyak_update(target_net: nn.Module, source_net: nn.Module, p: float):
     for target_param, source_param in zip(target_net.parameters(), source_net.parameters()):
         target_param.data.copy_(p * target_param.data + (1 - p) * source_param.data)
+
+def compute_disagreement(q_net, states, actions, mc_returns, batch_size=8192):
+    """
+    Computes |G - Q(s, a)| for large datasets in batches, avoiding OOM.
+    """
+    N = states.shape[0]
+    deltas = []
+
+    # flatten returns
+    mc_returns = mc_returns.view(-1)
+
+    with torch.no_grad():
+        for i in range(0, N, batch_size):
+            s_batch = states[i:i+batch_size]
+            a_batch = actions[i:i+batch_size]
+            g_batch = mc_returns[i:i+batch_size]
+
+            q_batch = q_net(s_batch, a_batch)
+
+            if q_batch.ndim == 2 and q_batch.shape[1] == 1:
+                q_batch = q_batch[:, 0]
+            elif q_batch.ndim == 1:
+                pass
+            else:
+                raise ValueError(f"Unexpected Q output shape: {q_batch.shape}")
+
+            # 🔒 Assert that both tensors have matching shape
+            assert q_batch.shape == g_batch.shape, \
+                f"Shape mismatch: g_batch {g_batch.shape}, q_batch {q_batch.shape}"
+
+            delta_batch = torch.abs(g_batch - q_batch)
+            deltas.append(delta_batch)
+
+    return torch.cat(deltas, dim=0)

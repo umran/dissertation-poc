@@ -2,7 +2,7 @@ from abc import ABC, abstractmethod
 
 from algorithms.common import ReplayBuffer
 from algorithms.policy import Policy
-from algorithms.networks import QNetwork
+from algorithms.networks import QNetwork, PolicyNetwork
 
 class ActorCritic(ABC):
     @abstractmethod
@@ -19,4 +19,8 @@ class ActorCritic(ABC):
 
     @abstractmethod
     def get_critic_network(self) -> QNetwork:
+        pass
+
+    @abstractmethod
+    def get_actor_network(self) -> PolicyNetwork:
         pass
