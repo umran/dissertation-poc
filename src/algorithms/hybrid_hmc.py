@@ -200,7 +200,7 @@ class SampledPolicy(Policy):
         with torch.no_grad():
             return self.policy_net(state)
 
-def q_model(state, action, y=None, prior_params=None, h1_dim=32):
+def q_model(state, action, y=None, prior_params=None, h1_dim=64):
     x = jnp.concatenate([state, action], axis=-1)
     n, input_dim = x.shape
 
@@ -223,8 +223,8 @@ def relu(x):
     return jnp.maximum(0, x)
 
 def linear(name, x, in_dim, out_dim, prior=None):
-    weight_scale = numpyro.sample(f"{name}_weight_scale", dist.Gamma(1.0, 1.0)) #.expand([in_dim, out_dim]))
-    bias_scale = numpyro.sample(f"{name}_bias_scale", dist.Gamma(1.0, 1.0)) #.expand([out_dim]))
+    weight_scale = numpyro.sample(f"{name}_weight_scale", dist.Gamma(1.0, 1.0).expand([in_dim, out_dim]))
+    bias_scale = numpyro.sample(f"{name}_bias_scale", dist.Gamma(1.0, 1.0).expand([out_dim]))
 
     if prior:
         weight_mu = jnp.asarray(prior["w"])
