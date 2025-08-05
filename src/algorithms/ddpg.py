@@ -1,7 +1,6 @@
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from typing import Optional
 
 from algorithms.actor_critic import ActorCritic
 from algorithms.policy import Policy

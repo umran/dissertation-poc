@@ -4,7 +4,6 @@ from typing import List, Optional
 
 from environments.environment import Environment
 from algorithms.common import ReplayBuffer, ObserverType
-from algorithms.networks import PolicyNetwork
 from algorithms.actor_critic import ActorCritic
 from algorithms.policy import Policy
 from algorithms.random_policy import RandomPolicy
