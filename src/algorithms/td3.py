@@ -77,7 +77,7 @@ class TD3(ActorCritic):
                     self.action_max
                 )
 
-                target = reward + gamma * (1 - done.to(torch.float32)) * torch.min(self.q1_net_target(next_state, target_action), self.q2_net_target(next_state, target_action))
+                target = reward + gamma * (1 - done) * torch.min(self.q1_net_target(next_state, target_action), self.q2_net_target(next_state, target_action))
             
             # do a gradient descent update of the
             # q networks to minimize the MSBE loss

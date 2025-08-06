@@ -29,7 +29,7 @@ class ReplayBuffer:
         self.actions = torch.zeros((capacity, *action_shape), dtype=action_dtype, device=device)
         self.rewards = torch.zeros((capacity, 1), dtype=torch.float32, device=device)
         self.next_states = torch.zeros((capacity, *state_shape), dtype=state_dtype, device=device)
-        self.terms = torch.zeros((capacity, 1), dtype=torch.bool, device=device)
+        self.terms = torch.zeros((capacity, 1), dtype=torch.float32, device=device)
 
     def add(self, state, action, reward, next_state, term):
         self.add_batch(
@@ -109,7 +109,7 @@ class EpisodicReplayBuffer:
         self.rewards = torch.zeros((capacity, 1), dtype=torch.float32, device=device)
         self.mc_returns = torch.zeros((capacity, 1), dtype=torch.float32, device=device)
         self.next_states = torch.zeros((capacity, *state_shape), dtype=state_dtype, device=device)
-        self.terms = torch.zeros((capacity, 1), dtype=torch.bool, device=device)
+        self.terms = torch.zeros((capacity, 1), dtype=torch.float32, device=device)
 
     def add(self, state, action, reward, mc_return, next_state, term):
         self.add_batch(
@@ -191,7 +191,7 @@ class EpisodicReplayBuffer:
                 rand_idx = torch.randint(len(segment), (1,)).item()
                 sample_indices.append(segment[rand_idx])
 
-        idx = torch.tensor(sample_indices, dtype=torch.int32)
+        idx = torch.tensor(sample_indices, dtype=torch.int32, device=self.device)
 
         return (
             self.states[idx],
@@ -264,7 +264,7 @@ def plot_multiple_benchmarks(
         plt.fill_between(steps, means - ci, means + ci, alpha=0.2, color=color, linewidth=0)
 
     plt.xlabel("Step")
-    plt.ylabel("Cumulative Reward")
+    plt.ylabel("Episodic Reward")
     plt.title("Performance")
     plt.legend()
     plt.grid(True)
@@ -296,7 +296,7 @@ def polyak_update(target_net: nn.Module, source_net: nn.Module, p: float):
     for target_param, source_param in zip(target_net.parameters(), source_net.parameters()):
         target_param.data.copy_(p * target_param.data + (1 - p) * source_param.data)
 
-def compute_disagreement(q_net, states, actions, mc_returns, batch_size=8192):
+def compute_disagreement(q_net, states: torch.Tensor, actions: torch.Tensor, mc_returns: torch.Tensor, batch_size: int = 8192):
     """
     Computes |G - Q(s, a)| for large datasets in batches, avoiding OOM.
     """
@@ -321,7 +321,6 @@ def compute_disagreement(q_net, states, actions, mc_returns, batch_size=8192):
             else:
                 raise ValueError(f"Unexpected Q output shape: {q_batch.shape}")
 
-            # 🔒 Assert that both tensors have matching shape
             assert q_batch.shape == g_batch.shape, \
                 f"Shape mismatch: g_batch {g_batch.shape}, q_batch {q_batch.shape}"
 

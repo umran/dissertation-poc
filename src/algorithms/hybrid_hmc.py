@@ -15,8 +15,6 @@ from algorithms.random_policy import RandomPolicy
 from algorithms.actor_critic import ActorCritic
 from environments.environment import Environment
 
-numpyro.set_host_device_count(4)
-
 class HybridHMC:
     def __init__(
         self,
@@ -68,7 +66,7 @@ class HybridHMC:
 
         for step in range(steps):
             # coarse progress tracking
-            if step % 10_000 == 0:
+            if step % 5_000 == 0:
                 print(step)
 
             action = policy.action(state)
@@ -76,8 +74,8 @@ class HybridHMC:
             done = term or trunc
 
             # append state, action, reward, done, next_state to episode_steps and replay buffer
-            episode_steps.append((state, action, reward, next_state, term))
-            replay_buffer.add(state, action, reward, next_state, term)
+            episode_steps.append((state, action, reward, next_state, term.to(torch.float32)))
+            replay_buffer.add(state, action, reward, next_state, term.to(torch.float32))
 
             if done:
                 # we've reached the end of an episode
@@ -102,8 +100,8 @@ class HybridHMC:
 
             # update posterior
             if step >= update_after and (step - update_after) % update_every == 0:
-                print("updating posterior")
                 self.update_posterior(episodic_replay_buffer)
+               
             
             if observer is not None:
                 observer(step, self.actor_critic.get_optimal_policy())
@@ -121,7 +119,12 @@ class HybridHMC:
             prior_params = extract_qnetwork_params(q_net)
 
         kernel = NUTS(q_model)
-        mcmc = MCMC(kernel, num_warmup=500, num_samples=1000, num_chains=1)
+        mcmc = MCMC(
+            kernel,
+            num_warmup=500,
+            num_samples=1000,
+            num_chains=1
+        )
         
         mcmc.run(self.next_rng_key(), state=state, action=action, y=target, prior_params=prior_params)
         mcmc.print_summary()
@@ -217,7 +220,6 @@ def q_model(state, action, y=None, prior_params=None, h1_dim=64):
         sigma = numpyro.sample("sigma", dist.Gamma(1.0, 1.0))
         with numpyro.plate("data", n):
             numpyro.sample("y", dist.Normal(out.squeeze(-1), sigma), obs=y.squeeze(-1))
-
 
 def relu(x):
     return jnp.maximum(0, x)

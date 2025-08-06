@@ -55,7 +55,7 @@ class DDPG(ActorCritic):
             state, action, reward, next_state, done = replay_buffer.sample(self.batch_size)
 
             with torch.no_grad():
-                target = reward + gamma * (1 - done.to(torch.float32)) * self.q_net_target(next_state, self.policy_net_target(next_state))
+                target = reward + gamma * (1 - done) * self.q_net_target(next_state, self.policy_net_target(next_state))
             
             # do a gradient descent update of the
             # q network to minimize the MSBE loss
