@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 
-from algorithms.actor_critic import ActorCritic
+from algorithms.actor_critic import ActorCritic, OptimalPolicy, ExplorationPolicy
 from algorithms.policy import Policy
 from algorithms.common import ReplayBuffer, copy_params, polyak_update, sample_gaussian
 from algorithms.networks import QNetwork, PolicyNetwork
@@ -48,7 +48,6 @@ class TD3(ActorCritic):
         copy_params(self.q2_net_target, self.q2_net)
         copy_params(self.policy_net_target, self.policy_net)
 
-
         self.batch_size = batch_size
         self.polyak = polyak
 
@@ -56,9 +55,6 @@ class TD3(ActorCritic):
         self.q1_optimizer = optim.Adam(self.q1_net.parameters(), lr=q_lr)
         self.q2_optimizer = optim.Adam(self.q2_net.parameters(), lr=q_lr)
         self.policy_optimizer = optim.Adam(self.policy_net.parameters(), lr=policy_lr)
-
-        # define the loss function
-        self.loss = nn.MSELoss()
 
         # define the optimal policy
         self.optimal_policy = OptimalPolicy(self.policy_net)
@@ -85,12 +81,12 @@ class TD3(ActorCritic):
             
             # do a gradient descent update of the
             # q networks to minimize the MSBE loss
-            q1_loss = self.loss(self.q1_net(state, action), target)
+            q1_loss = nn.MSELoss()(self.q1_net(state, action), target)
             self.q1_optimizer.zero_grad()
             q1_loss.backward()
             self.q1_optimizer.step()
 
-            q2_loss = self.loss(self.q2_net(state, action), target)
+            q2_loss = nn.MSELoss()(self.q2_net(state, action), target)
             self.q2_optimizer.zero_grad()
             q2_loss.backward()
             self.q2_optimizer.step()
@@ -120,26 +116,3 @@ class TD3(ActorCritic):
     
     def get_actor_network(self) -> PolicyNetwork:
         return self.policy_net
-
-class OptimalPolicy(Policy):
-    def __init__(self, policy_net: nn.Module):
-        self.policy_net = policy_net
-
-    def action(self, state: torch.Tensor) -> torch.Tensor:
-        with torch.no_grad():
-            return self.policy_net(state)
-
-class ExplorationPolicy(Policy):
-    def __init__(self, policy_net: nn.Module, noise: float, action_min: torch.Tensor, action_max: torch.Tensor):
-        self.policy_net = policy_net
-        self.noise = noise
-        self.action_min = action_min
-        self.action_max = action_max
-    
-    def action(self, state: torch.Tensor) -> torch.Tensor:
-        with torch.no_grad():
-            action = self.policy_net(state)
-        
-        noise = sample_gaussian(0.0, self.noise, action.shape, device=action.device)
-
-        return torch.clamp(action + noise, self.action_min, self.action_max)

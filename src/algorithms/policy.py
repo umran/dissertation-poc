@@ -1,8 +1,5 @@
 import torch
 from abc import ABC, abstractmethod
-from typing import Optional
-
-from algorithms.networks import PolicyNetwork
 
 class Policy(ABC):
     @abstractmethod

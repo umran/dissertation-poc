@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 
-from algorithms.actor_critic import ActorCritic
+from algorithms.actor_critic import ActorCritic, OptimalPolicy, ExplorationPolicy
 from algorithms.policy import Policy
 from algorithms.common import ReplayBuffer, copy_params, polyak_update, sample_gaussian
 from algorithms.networks import QNetwork, PolicyNetwork
@@ -34,16 +34,12 @@ class DDPG(ActorCritic):
         copy_params(self.q_net_target, self.q_net)
         copy_params(self.policy_net_target, self.policy_net)
 
-
         self.batch_size = batch_size
         self.polyak = polyak
 
         # initialize optimizers for the q and policy networks
         self.q_optimizer = optim.Adam(self.q_net.parameters(), lr=q_lr)
         self.policy_optimizer = optim.Adam(self.policy_net.parameters(), lr=policy_lr)
-
-        # define the loss function
-        self.loss = nn.MSELoss()
 
         # define the optimal policy
         self.optimal_policy = OptimalPolicy(self.policy_net)
@@ -63,17 +59,14 @@ class DDPG(ActorCritic):
             
             # do a gradient descent update of the
             # q network to minimize the MSBE loss
-            predicted = self.q_net(state, action)
-            q_loss = self.loss(predicted, target)
-
+            q_loss = nn.MSELoss()(self.q_net(state, action), target)
             self.q_optimizer.zero_grad()
             q_loss.backward()
             self.q_optimizer.step()
 
             # do a gradient ascent update of the policy
             # network to maximize the average state-action value
-            policy_loss = -1 * self.q_net(state, self.policy_net(state)).mean()
-            
+            policy_loss = -1 * self.q_net(state, self.policy_net(state)).mean() 
             self.policy_optimizer.zero_grad()
             policy_loss.backward()
             self.policy_optimizer.step()
@@ -93,24 +86,3 @@ class DDPG(ActorCritic):
     
     def get_actor_network(self) -> PolicyNetwork:
         return self.policy_net
-
-class OptimalPolicy(Policy):
-    def __init__(self, policy_net: nn.Module):
-        self.policy_net = policy_net
-
-    def action(self, state: torch.Tensor) -> torch.Tensor:
-        with torch.no_grad():
-            return self.policy_net(state)
-
-class ExplorationPolicy(Policy):
-    def __init__(self, policy_net: nn.Module, noise: float):
-        self.policy_net = policy_net
-        self.noise = noise
-    
-    def action(self, state: torch.Tensor) -> torch.Tensor:
-        with torch.no_grad():
-            action = self.policy_net(state)
-        
-        noise = sample_gaussian(0.0, self.noise, action.shape, device=action.device)
-
-        return action + noise
