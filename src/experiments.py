@@ -15,7 +15,7 @@ from environments.inverted_double_pendulum import InvertedDoublePendulum
 
 OUTDIR = "./out"
 
-DEVICE = torch.device("cuda" if torch.cuda.is_available() else "mps")
+DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 # HMC_AC Configurations
 HMC_AC_100_5K = {
