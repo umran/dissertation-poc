@@ -1,4 +1,5 @@
-from algorithms.common import new_observer, plot_multiple_benchmarks
+from util import plot_multiple_benchmarks
+from algorithms.common import new_observer
 from algorithms.vanilla_actor_critic import VanillaActorCritic
 from algorithms.ddpg import DDPG
 from algorithms.bootstrapped_actor_critic import BootstrappedActorCritic
@@ -23,7 +24,7 @@ def bench_bac_hopper():
 
     full_bac = BootstrappedActorCritic(Hopper(), [DDPG(Hopper()) for _ in range(10)])
     full_bac_observer, full_bac_results = new_observer(Hopper())
-    full_bac.train(p_mask=0.8, observer=full_bac_observer)
+    full_bac.train(p_mask=1, observer=full_bac_observer)
 
     plot_multiple_benchmarks(
         [

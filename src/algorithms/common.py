@@ -2,8 +2,7 @@ import torch
 import torch.nn as nn
 
 import numpy as np
-import matplotlib.pyplot as plt
-from typing import Tuple, Optional, List, Dict, Callable
+from typing import Tuple, Optional, Dict, Callable, Any
 
 from algorithms.policy import Policy
 from algorithms.networks import QNetwork
@@ -169,7 +168,7 @@ class EpisodicReplayBuffer:
             self.terms[idx]
         )
     
-    def sample_per(self, q_net: QNetwork, batch_size: int):
+    def new_per_sampler(self, q_net: QNetwork):
         if self.size == 0:
             raise ValueError("Cannot sample from empty buffer")
         
@@ -179,28 +178,31 @@ class EpisodicReplayBuffer:
         # Sort transitions by error in descending order
         sorted_indices = torch.argsort(delta, descending=True)
 
-        # Stratified sampling: divide into k segments of equal probability mass
-        segment_size = self.size // batch_size
-        sample_indices = []
+        def sample_per(batch_size: int):
+            # Stratified sampling: divide into k segments of equal probability mass
+            segment_size = self.size // batch_size
+            sample_indices = []
 
-        for i in range(batch_size):
-            start = i * segment_size
-            end = (i + 1) * segment_size if i < batch_size - 1 else self.size
-            if end > start:
-                segment = sorted_indices[start:end]
-                rand_idx = torch.randint(len(segment), (1,)).item()
-                sample_indices.append(segment[rand_idx])
+            for i in range(batch_size):
+                start = i * segment_size
+                end = (i + 1) * segment_size if i < batch_size - 1 else self.size
+                if end > start:
+                    segment = sorted_indices[start:end]
+                    rand_idx = torch.randint(len(segment), (1,)).item()
+                    sample_indices.append(segment[rand_idx])
 
-        idx = torch.tensor(sample_indices, dtype=torch.int32, device=self.device)
+            idx = torch.tensor(sample_indices, dtype=torch.long, device=self.device)
 
-        return (
-            self.states[idx],
-            self.actions[idx],
-            self.rewards[idx],
-            self.mc_returns[idx],
-            self.next_states[idx],
-            self.terms[idx]
-        )
+            return (
+                self.states[idx],
+                self.actions[idx],
+                self.rewards[idx],
+                self.mc_returns[idx],
+                self.next_states[idx],
+                self.terms[idx]
+            )
+
+        return sample_per
 
     def __len__(self):
         return self.size
@@ -210,7 +212,12 @@ ObserverType = Callable[
     None
 ]
 
-def new_observer(bench_env: Environment, bench_every = 10_000, bench_episodes = 10):
+SampleObserverType = Callable[
+    [int, Dict[str, Any]],
+    None
+]
+
+def new_observer(bench_env: Environment, bench_every = 1_000, bench_episodes = 10):
     bench_results = []
 
     def observer(
@@ -223,6 +230,22 @@ def new_observer(bench_env: Environment, bench_every = 10_000, bench_episodes = 
             bench_results.append(results)
 
     return observer, bench_results
+
+def new_sample_observer():
+    posterior_samples = []
+
+    def observer(
+        step: int,
+        samples: Dict[str, Any]
+    ):
+        posterior_samples.append({
+            "step": step,
+            "samples": samples
+        })
+    
+    return observer, posterior_samples
+
+
 
 def run_bench(env: Environment, policy: Policy, num_episodes: int) -> Dict[str, float]:
     episode_rewards = np.zeros(num_episodes)
@@ -245,31 +268,6 @@ def run_bench(env: Environment, policy: Policy, num_episodes: int) -> Dict[str, 
         "min": episode_rewards.min(),
         "max": episode_rewards.max()
     }
-
-def plot_multiple_benchmarks(
-    benchmark_sets: List[Tuple[List[Dict[str, float]], str]],  # (results, label)
-    colors: List[str] = None
-):
-    plt.figure(figsize=(10, 6))
-
-    for i, (results, label) in enumerate(benchmark_sets):
-        steps = np.array([r["step"] for r in results])
-        means = np.array([r["mean"] for r in results])
-        sds = np.array([r["sd"] for r in results])
-        ci = 1.96 * sds
-
-        color = colors[i] if colors is not None and i < len(colors) else None
-
-        plt.plot(steps, means, label=label, color=color)
-        plt.fill_between(steps, means - ci, means + ci, alpha=0.2, color=color, linewidth=0)
-
-    plt.xlabel("Step")
-    plt.ylabel("Episodic Reward")
-    plt.title("Performance")
-    plt.legend()
-    plt.grid(True)
-    plt.tight_layout()
-    plt.show()
 
 def sample_gaussian(
     mean: float,

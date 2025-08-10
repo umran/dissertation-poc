@@ -1,6 +1,7 @@
 import torch
-import torch.optim as optim
 import torch.nn as nn
+import torch.optim as optim
+from torch.optim.lr_scheduler import OneCycleLR
 import jax
 import jax.numpy as jnp
 import numpyro
@@ -8,7 +9,7 @@ import numpyro.distributions as dist
 from numpyro.infer import MCMC, NUTS
 from typing import Tuple, List, Optional
 
-from algorithms.common import ReplayBuffer, EpisodicReplayBuffer, ObserverType, copy_params
+from algorithms.common import ReplayBuffer, EpisodicReplayBuffer, ObserverType, SampleObserverType, copy_params
 from algorithms.networks import PolicyNetwork, QNetwork
 from algorithms.policy import Policy
 from algorithms.random_policy import RandomPolicy
@@ -20,12 +21,11 @@ class HybridHMC:
         self,
         env: Environment,
         actor_critic: ActorCritic,
-        rng_key = jax.random.key(0),
         device: torch.device = torch.device("cpu"),
     ):
         self.env = env
         self.actor_critic = actor_critic
-        self.rng_key = rng_key
+        self.rng_key = jax.random.key(torch.randint(0, 2**32, (1,), dtype=torch.int64).item())
         self.device = device
 
         self.random_policy = RandomPolicy(
@@ -39,34 +39,49 @@ class HybridHMC:
 
     def train(
         self,
-        steps=200_000,
+        steps = 200_000,
+        batch_size = 1000,
+        num_warmup = 500,
+        num_samples = 1000,
         update_after=10_000,
         update_every=5_000,
-        update_actor_critic_every=50,
-        gamma=0.99,
+        update_actor_critic_every = 50,
+        replay_buffer_size = 1_000_000,
+        episodic_replay_buffer_size = 1_000_000,
+        exploration_policy_lr = 1e-2,
+        exploration_policy_optimization_steps = 100,
+        exploration_policy_optimization_batch_size = 128,
+        gamma = 0.99,
         observer: Optional[ObserverType] = None,
+        sample_observer: Optional[SampleObserverType] = None,
     ):
         replay_buffer = ReplayBuffer(
-            1_000_000,
+            replay_buffer_size,
             self.env.state_shape(),
             self.env.action_shape(),
             device=self.device
         )
 
         episodic_replay_buffer = EpisodicReplayBuffer(
-            1_000_000,
+            episodic_replay_buffer_size,
             self.env.state_shape(),
             self.env.action_shape(),
             device=self.device
         )
 
-        policy = self.sample_policy(episodic_replay_buffer)
+        policy = self.sample_policy(
+            episodic_replay_buffer,
+            exploration_policy_lr,
+            exploration_policy_optimization_steps,
+            exploration_policy_optimization_batch_size
+        )
+
         state = self.env.reset()
         episode_steps: List[Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]] = []
 
         for step in range(steps):
             # coarse progress tracking
-            if step % 5_000 == 0:
+            if step % update_every == 0:
                 print(step)
 
             action = policy.action(state)
@@ -87,8 +102,15 @@ class HybridHMC:
 
                 # reset episode_steps
                 episode_steps = []
+                
                 # resample policy
-                policy = self.sample_policy(episodic_replay_buffer)
+                policy = self.sample_policy(
+                    episodic_replay_buffer,
+                    exploration_policy_lr,
+                    exploration_policy_optimization_steps,
+                    exploration_policy_optimization_batch_size
+                )
+                
                 # get new initial state
                 state = self.env.reset()
             else:
@@ -100,15 +122,25 @@ class HybridHMC:
 
             # update posterior
             if step >= update_after and (step - update_after) % update_every == 0:
-                self.update_posterior(episodic_replay_buffer)
+                self.update_posterior(episodic_replay_buffer, batch_size, num_warmup, num_samples)
+                
+                if sample_observer is not None:
+                    sample_observer(step, self.q_weight_posterior)
                
             
             if observer is not None:
                 observer(step, self.actor_critic.get_optimal_policy())
 
-    def update_posterior(self, episodic_replay_buffer: EpisodicReplayBuffer):
+    def update_posterior(
+        self,
+        episodic_replay_buffer: EpisodicReplayBuffer,
+        batch_size: int,
+        num_warmup: int,
+        num_samples: int
+    ):
         q_net = self.actor_critic.get_critic_network()
-        state, action, _, mc_return, _, _ = episodic_replay_buffer.sample_per(q_net, 1000)
+        sample_per = episodic_replay_buffer.new_per_sampler(q_net)
+        state, action, _, mc_return, _, _ = sample_per(batch_size)
 
         state = jnp.array(state.cpu().numpy())
         action = jnp.array(action.cpu().numpy())
@@ -121,14 +153,14 @@ class HybridHMC:
         kernel = NUTS(q_model)
         mcmc = MCMC(
             kernel,
-            num_warmup=500,
-            num_samples=1000,
+            num_warmup=num_warmup,
+            num_samples=num_samples,
             num_chains=1
         )
         
         mcmc.run(self.next_rng_key(), state=state, action=action, y=target, prior_params=prior_params)
         mcmc.print_summary()
-        
+
         self.q_weight_posterior = mcmc.get_samples()
         
         # instantiate a new policy
@@ -142,7 +174,7 @@ class HybridHMC:
         copy_params(self.exploration_policy_net, self.actor_critic.get_actor_network())
         
 
-    def sample_policy(self, episodic_replay_buffer: EpisodicReplayBuffer) -> Policy:
+    def sample_policy(self, episodic_replay_buffer: EpisodicReplayBuffer, exploration_policy_lr: float, exploration_policy_optimization_steps: int, exploration_policy_optimization_batch_size: int) -> Policy:
         # this method should return the policy corresponding to a Q function
         # randomly sampled from the posterior estimated by HMC if a posterior
         # has been estimated, otherwise returns the random policy
@@ -160,17 +192,32 @@ class HybridHMC:
         q_net = SampledQNetwork(q_params).to(self.device)
 
         # instantiate optimizer for policy parameters
-        optimizer = optim.Adam(self.exploration_policy_net.parameters(), lr=1e-2)
+        optimizer = optim.Adam(self.exploration_policy_net.parameters(), lr=exploration_policy_lr)
 
-        state, _, _, _, _, _ = episodic_replay_buffer.sample_per(q_net, 1000)
-        for _ in range(100):
+        # setup a OneCycleLR Scheduler for efficient optimization
+        scheduler = OneCycleLR(
+            optimizer,
+            max_lr=exploration_policy_lr,
+            total_steps=exploration_policy_optimization_steps,
+            pct_start=0.05,
+            anneal_strategy="cos",
+            div_factor=10.0,
+            final_div_factor=1000.0,
+            cycle_momentum=False,   # important for Adam/AdamW
+        )
+
+        sample_per = episodic_replay_buffer.new_per_sampler(q_net)
+        for _ in range(exploration_policy_optimization_steps):
+            state, _, _, _, _, _ = sample_per(exploration_policy_optimization_batch_size)
             action = self.exploration_policy_net(state)
             value = q_net(state, action)
             loss = -value.mean()
 
             optimizer.zero_grad()
             loss.backward()
+            nn.utils.clip_grad_norm_(self.exploration_policy_net.parameters(), 1.0)
             optimizer.step()
+            scheduler.step()
         
         return SampledPolicy(self.exploration_policy_net)
 
