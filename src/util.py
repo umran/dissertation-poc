@@ -1,9 +1,10 @@
 from typing import List, Tuple, Dict
+from numpy.typing import ArrayLike
 import numpy as np
 import matplotlib.pyplot as plt
 
 def plot_ablation(filename: str):
-    ablation = load_dict_from_npy(filename)
+    ablation = load_from_npy(filename)
 
     results_100_50k = ablation["hmc_ac_100_50k_results"]
     results_1000_50k = ablation["hmc_ac_1000_50k_results"]
@@ -21,7 +22,7 @@ def plot_ablation(filename: str):
     )
 
 def plot_comparative(filename: str):
-    comparative = load_dict_from_npy(filename)
+    comparative = load_from_npy(filename)
 
     results_random = comparative["random_results"]
     results_vanilla = comparative["vanilla_results"]
@@ -62,8 +63,8 @@ def plot_multiple_benchmarks(
     plt.tight_layout()
     plt.show()
 
-def save_dict_to_npy(d: dict, filename: str):
-    np.save(filename, d, allow_pickle=True)
+def save_to_npy(data: ArrayLike, filename: str):
+    np.save(filename, data, allow_pickle=True)
 
-def load_dict_from_npy(filename: str) -> dict:
+def load_from_npy(filename: str) -> ArrayLike:
     return np.load(filename, allow_pickle=True).item()
