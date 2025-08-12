@@ -9,6 +9,8 @@ class Hopper(Environment):
         self.env = gym.make("Hopper-v5", render_mode=render_mode)
         self.device = device
 
+        self.env.reset(seed=torch.randint(0, 1 << 32, (1,), dtype=torch.int64).item())
+
     def state_shape(self) -> Tuple[int, ...]:
         return (11, )
 

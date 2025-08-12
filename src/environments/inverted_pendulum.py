@@ -9,6 +9,8 @@ class InvertedPendulum(Environment):
         self.env = gym.make("InvertedPendulum-v5", render_mode=render_mode)
         self.device = device
 
+        self.env.reset(seed=torch.randint(0, 1 << 32, (1,), dtype=torch.int64).item())
+
     def state_shape(self) -> Tuple[int, ...]:
         return (4, )
 
