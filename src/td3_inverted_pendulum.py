@@ -12,5 +12,5 @@ if torch.cuda.is_available():
 
 prod = Experiments("./out/prod", device=DEVICE)
 
+prod.baselines("td3_inverted_pendulum", InvertedPendulum, TD3, 1_000_000)
 prod.ablation("td3_inverted_pendulum", InvertedPendulum, TD3, 1_000_000)
-# prod.baselines("td3_inverted_pendulum", InvertedPendulum, TD3, 1_000_000)
