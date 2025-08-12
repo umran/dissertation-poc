@@ -1,7 +1,7 @@
 import os
 from pathlib import Path
 import torch
-from typing import Type, Optional, Tuple, List, Dict
+from typing import Type
 
 from util import save_to_npy, load_from_npy, plot_multiple_benchmarks
 from algorithms.common import new_observer, new_sample_observer
