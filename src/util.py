@@ -1,4 +1,4 @@
-from typing import List, Tuple, Dict
+from typing import List, Tuple, Dict, Optional
 from numpy.typing import ArrayLike
 import numpy as np
 import matplotlib.pyplot as plt
@@ -38,9 +38,10 @@ def plot_comparative(filename: str):
     )
 
 def plot_multiple_benchmarks(
-    benchmark_sets: List[Tuple[List[Dict[str, float]], str]],  # (results, label)
+    benchmark_sets: List[Tuple[List[Dict[str, float]], str]],
     colors: List[str] = None,
-    title: str = "Performance Over Time"
+    title: str = "Performance Over Time",
+    truncate_after: Optional[int] = None
 ):
     plt.figure(figsize=(10, 6))
 
@@ -50,6 +51,12 @@ def plot_multiple_benchmarks(
         sds = np.array([r["sd"] for r in results])
         ci = 1.96 * sds
 
+        if truncate_after is not None:
+            mask = steps <= truncate_after
+            steps = steps[mask]
+            means = means[mask]
+            ci = ci[mask]
+
         color = colors[i] if colors is not None and i < len(colors) else None
 
         plt.plot(steps, means, label=label, color=color)
@@ -57,6 +64,35 @@ def plot_multiple_benchmarks(
 
     plt.xlabel("Step")
     plt.ylabel("Episodic Reward")
+    plt.title(title)
+    plt.legend()
+    plt.grid(True)
+    plt.tight_layout()
+    plt.show()
+
+def plot_multiple_variances(
+    benchmark_sets: List[Tuple[List[Dict[str, float]], str]],
+    colors: List[str] = None,
+    title: str = "Variance Over Time",
+    truncate_after: Optional[int] = None
+):
+    plt.figure(figsize=(10, 6))
+
+    for i, (results, label) in enumerate(benchmark_sets):
+        steps = np.array([r["step"] for r in results])
+        sds = np.array([r["sd"] for r in results])
+
+        if truncate_after is not None:
+            mask = steps <= truncate_after
+            steps = steps[mask]
+            sds = sds[mask]
+
+        color = colors[i] if colors is not None and i < len(colors) else None
+
+        plt.plot(steps, sds, label=label, color=color)
+
+    plt.xlabel("Step")
+    plt.ylabel("Reward Variance")
     plt.title(title)
     plt.legend()
     plt.grid(True)
