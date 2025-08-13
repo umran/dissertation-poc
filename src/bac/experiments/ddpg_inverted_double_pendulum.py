@@ -1,7 +1,7 @@
 import torch
 
 from bac.algorithms.actor_critic import DDPG
-from bac.environments.inverted_double_pendulum import InvertedDoublePendulum
+from bac.environments import InvertedDoublePendulum
 from bac.manifest import Manifest
 
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")

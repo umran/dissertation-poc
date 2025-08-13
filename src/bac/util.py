@@ -3,41 +3,7 @@ from numpy.typing import ArrayLike
 import numpy as np
 import matplotlib.pyplot as plt
 
-def plot_ablation(filename: str):
-    ablation = load_from_npy(filename).item()
-
-    results_100_50k = ablation["hmc_ac_100_50k_results"]
-    results_1000_50k = ablation["hmc_ac_1000_50k_results"]
-    results_100_5k = ablation["hmc_ac_100_5k_results"]
-    results_1000_5k = ablation["hmc_ac_1000_5k_results"]
-
-    plot_multiple_benchmarks(
-        [   
-            (results_100_50k, "HMC 100 50K"),
-            (results_1000_50k, "HMC 1000 50K"),
-            (results_100_5k, "HMC 100 5K"),
-            (results_1000_5k, "HMC 1000 5K")
-        ],
-        colors=["red", "blue", "green", "yellow"]
-    )
-
-def plot_comparative(filename: str):
-    comparative = load_from_npy(filename).item()
-
-    results_random = comparative["random_results"]
-    results_vanilla = comparative["vanilla_results"]
-    results_hmc_ac = comparative["hmc_ac_results"]
-
-    plot_multiple_benchmarks(
-        [   
-            (results_random, "Uniform Random Exploration"),
-            (results_vanilla, "Optimal Exploration with Gaussian Noise"),
-            (results_hmc_ac, "HMC Posterior Sampling Based Exploration"),
-        ],
-        colors=["red", "blue", "green"]
-    )
-
-def plot_multiple_benchmarks(
+def plot_performance(
     benchmark_sets: List[Tuple[List[Dict[str, float]], str]],
     colors: List[str] = None,
     title: str = "Performance Over Time",
@@ -70,7 +36,7 @@ def plot_multiple_benchmarks(
     plt.tight_layout()
     plt.show()
 
-def plot_multiple_variances(
+def plot_variance(
     benchmark_sets: List[Tuple[List[Dict[str, float]], str]],
     colors: List[str] = None,
     title: str = "Variance Over Time",

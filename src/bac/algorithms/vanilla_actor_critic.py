@@ -3,9 +3,9 @@ from tqdm import tqdm
 from typing import Optional
 
 from bac.algorithms.common import ReplayBuffer, ObserverType
-from bac.algorithms.random_policy import RandomPolicy
-from bac.environments.environment import Environment
-from .actor_critic import ActorCritic
+from bac.algorithms.actor_critic import ActorCritic
+from bac.algorithms.policy import RandomPolicy
+from bac.environments import Environment
 
 class VanillaActorCritic:
     def __init__(

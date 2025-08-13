@@ -3,12 +3,11 @@ from pathlib import Path
 import torch
 from typing import Type, Optional
 
-from bac.util import save_to_npy, load_from_npy, plot_multiple_benchmarks, plot_multiple_variances
+from bac.util import save_to_npy, load_from_npy, plot_performance, plot_variance
 from bac.algorithms.common import new_observer, new_sample_observer
-from bac.algorithms.hybrid_hmc import HybridHMC
 from bac.algorithms.actor_critic import ActorCritic
-from bac.algorithms.actor_critic import VanillaActorCritic
-from bac.environments.environment import Environment
+from bac.algorithms import HMCActorCritic, VanillaActorCritic
+from bac.environments import Environment
 
 HMC_AC_SMALL_100_5K = {
     "batch_size": 128,
@@ -152,7 +151,7 @@ class Manifest:
         return ac, observer, results
 
     def prepare_hmc_actor_critic(self, environment_cls: Type[Environment], actor_critic_cls: Type[ActorCritic]):
-        hmc_ac = HybridHMC(environment_cls(device=self.device), actor_critic_cls(environment_cls(device=self.device), device=self.device), device=self.device)
+        hmc_ac = HMCActorCritic(environment_cls(device=self.device), actor_critic_cls(environment_cls(device=self.device), device=self.device), device=self.device)
         observer, results = new_observer(environment_cls(device=self.device))
         sample_observer, posterior_samples = new_sample_observer()
 
@@ -185,8 +184,8 @@ class Manifest:
                 case _:
                     pass
                 
-        plot_multiple_benchmarks(results, colors=colors, truncate_after=truncate_after)
-        plot_multiple_variances(results, colors=colors, truncate_after=truncate_after)
+        plot_performance(results, colors=colors, truncate_after=truncate_after)
+        plot_variance(results, colors=colors, truncate_after=truncate_after)
     
     def plot_ablation(self, prefix: str, truncate_after: Optional[int] = None):
         results_large = []
@@ -236,8 +235,7 @@ class Manifest:
                 case _:
                     pass
 
-        # plot_multiple_benchmarks(results, colors=colors, truncate_after=truncate_after)
-        plot_multiple_benchmarks(results_large, colors=colors_large, truncate_after=truncate_after, title="1024 Observations Per Update")
-        plot_multiple_benchmarks(results_small, colors=colors_small, truncate_after=truncate_after, title="128 Observations Per Update")
-        plot_multiple_benchmarks(results_5k, colors=colors_5k, truncate_after=truncate_after, title="Updates Every 5K Steps")
-        plot_multiple_benchmarks(results_50k, colors=colors_50k, truncate_after=truncate_after, title="Updates Every 50K Steps")
+        plot_performance(results_large, colors=colors_large, truncate_after=truncate_after, title="1024 Observations Per Update")
+        plot_performance(results_small, colors=colors_small, truncate_after=truncate_after, title="128 Observations Per Update")
+        plot_performance(results_5k, colors=colors_5k, truncate_after=truncate_after, title="Updates Every 5K Steps")
+        plot_performance(results_50k, colors=colors_50k, truncate_after=truncate_after, title="Updates Every 50K Steps")

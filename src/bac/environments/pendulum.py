@@ -2,7 +2,7 @@ import torch
 import gymnasium as gym
 from typing import Tuple, Any
 
-from bac.environments.environment import Environment
+from .environment import Environment
 
 class Pendulum(Environment):
     def __init__(self, render_mode: str = "rgb_array", device: torch.device = torch.device("cpu")):
