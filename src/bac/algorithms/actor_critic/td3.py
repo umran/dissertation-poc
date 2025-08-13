@@ -2,11 +2,11 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 
-from algorithms.actor_critic import ActorCritic, OptimalPolicy, ExplorationPolicy
-from algorithms.policy import Policy
-from algorithms.common import ReplayBuffer, copy_params, polyak_update, sample_gaussian
-from algorithms.networks import QNetwork, PolicyNetwork
-from environments.environment import Environment
+from bac.algorithms.policy import Policy
+from bac.algorithms.common import ReplayBuffer, copy_params, polyak_update, sample_gaussian
+from bac.algorithms.networks import QNetwork, PolicyNetwork
+from bac.environments.environment import Environment
+from .actor_critic import ActorCritic, OptimalPolicy, ExplorationPolicy
 
 class TD3(ActorCritic):
     def __init__(

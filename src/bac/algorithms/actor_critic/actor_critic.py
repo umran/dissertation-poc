@@ -1,9 +1,9 @@
 from abc import ABC, abstractmethod
 import torch
 
-from algorithms.common import ReplayBuffer, sample_gaussian
-from algorithms.policy import Policy
-from algorithms.networks import QNetwork, PolicyNetwork
+from bac.algorithms.common import ReplayBuffer, sample_gaussian
+from bac.algorithms.policy import Policy
+from bac.algorithms.networks import QNetwork, PolicyNetwork
 
 class ActorCritic(ABC):
     @abstractmethod

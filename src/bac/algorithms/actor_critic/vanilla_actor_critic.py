@@ -2,10 +2,10 @@ import torch
 from tqdm import tqdm
 from typing import Optional
 
-from algorithms.common import ReplayBuffer, ObserverType
-from algorithms.random_policy import RandomPolicy
-from algorithms.actor_critic import ActorCritic
-from environments.environment import Environment
+from bac.algorithms.common import ReplayBuffer, ObserverType
+from bac.algorithms.random_policy import RandomPolicy
+from bac.environments.environment import Environment
+from .actor_critic import ActorCritic
 
 class VanillaActorCritic:
     def __init__(

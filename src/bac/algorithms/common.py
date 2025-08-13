@@ -1,12 +1,11 @@
 import torch
 import torch.nn as nn
-
 import numpy as np
 from typing import Tuple, Optional, Dict, Callable, Any
 
-from algorithms.policy import Policy
-from algorithms.networks import QNetwork
-from environments.environment import Environment
+from bac.algorithms.policy import Policy
+from bac.algorithms.networks import QNetwork
+from bac.environments.environment import Environment
 
 class ReplayBuffer:
     def __init__(self, 

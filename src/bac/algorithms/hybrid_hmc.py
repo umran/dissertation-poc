@@ -9,12 +9,12 @@ import numpyro.distributions as dist
 from numpyro.infer import MCMC, NUTS
 from typing import Tuple, List, Optional
 
-from algorithms.common import ReplayBuffer, EpisodicReplayBuffer, ObserverType, SampleObserverType, copy_params
-from algorithms.networks import PolicyNetwork, QNetwork
-from algorithms.policy import Policy
-from algorithms.random_policy import RandomPolicy
-from algorithms.actor_critic import ActorCritic
-from environments.environment import Environment
+from bac.algorithms.common import ReplayBuffer, EpisodicReplayBuffer, ObserverType, SampleObserverType, copy_params
+from bac.algorithms.networks import PolicyNetwork, QNetwork
+from bac.algorithms.policy import Policy
+from bac.algorithms.random_policy import RandomPolicy
+from bac.algorithms.actor_critic import ActorCritic
+from bac.environments.environment import Environment
 
 class HybridHMC:
     def __init__(

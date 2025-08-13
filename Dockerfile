@@ -23,5 +23,6 @@ RUN uv sync
 COPY . .
 
 RUN uv sync
+RUN uv pip install -e .
 
 CMD ["/bin/bash"]

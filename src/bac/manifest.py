@@ -3,12 +3,12 @@ from pathlib import Path
 import torch
 from typing import Type, Optional
 
-from util import save_to_npy, load_from_npy, plot_multiple_benchmarks, plot_multiple_variances
-from algorithms.common import new_observer, new_sample_observer
-from algorithms.hybrid_hmc import HybridHMC
-from algorithms.actor_critic import ActorCritic
-from algorithms.vanilla_actor_critic import VanillaActorCritic
-from environments.environment import Environment
+from bac.util import save_to_npy, load_from_npy, plot_multiple_benchmarks, plot_multiple_variances
+from bac.algorithms.common import new_observer, new_sample_observer
+from bac.algorithms.hybrid_hmc import HybridHMC
+from bac.algorithms.actor_critic import ActorCritic
+from bac.algorithms.actor_critic import VanillaActorCritic
+from bac.environments.environment import Environment
 
 HMC_AC_SMALL_100_5K = {
     "batch_size": 128,
@@ -82,7 +82,7 @@ HMC_AC_LARGE_100_5K = {
     "episodic_replay_buffer_size": 1_000_000,
 }
 
-class Experiments:
+class Manifest:
     def __init__(self, outdir: str, device: torch.device = torch.device("cpu")):
         self.outdir = outdir
         self.device = device

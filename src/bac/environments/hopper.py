@@ -2,7 +2,7 @@ import torch
 import gymnasium as gym
 from typing import Tuple, Any
 
-from environments.environment import Environment
+from bac.environments.environment import Environment
 
 class Hopper(Environment):
     def __init__(self, render_mode: str = "rgb_array", device: torch.device = torch.device("cpu")):

@@ -2,11 +2,11 @@ import torch
 from tqdm import tqdm
 from typing import List, Optional
 
-from environments.environment import Environment
-from algorithms.common import ReplayBuffer, ObserverType
-from algorithms.actor_critic import ActorCritic
-from algorithms.policy import Policy
-from algorithms.random_policy import RandomPolicy
+from bac.environments.environment import Environment
+from bac.algorithms.common import ReplayBuffer, ObserverType
+from bac.algorithms.actor_critic import ActorCritic
+from bac.algorithms.policy import Policy
+from bac.algorithms.random_policy import RandomPolicy
 
 class BootstrappedActorCritic:
     def __init__(self, env: Environment, ensemble: List[ActorCritic], device: torch.device = torch.device("cpu")):
