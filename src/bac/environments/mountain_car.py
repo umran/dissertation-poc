@@ -2,15 +2,17 @@ import torch
 import gymnasium as gym
 from typing import Tuple, Any
 
-from environments.environment import Environment
+from bac.environments.environment import Environment
 
-class InvertedDoublePendulum(Environment):
+class MountainCar(Environment):
     def __init__(self, render_mode: str = "rgb_array", device: torch.device = torch.device("cpu")):
-        self.env = gym.make("InvertedDoublePendulum-v5", render_mode=render_mode)
+        self.env = gym.make("MountainCarContinuous-v0", render_mode=render_mode)
         self.device = device
 
+        self.env.reset(seed=torch.randint(0, 1 << 32, (1,), dtype=torch.int64).item())
+
     def state_shape(self) -> Tuple[int, ...]:
-        return (9, )
+        return (2, )
 
     def action_shape(self) -> Tuple[int, ...]:
         return (1, )

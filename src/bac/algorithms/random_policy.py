@@ -1,6 +1,7 @@
 import torch
 from typing import Tuple
-from algorithms.policy import Policy
+
+from bac.algorithms.policy import Policy
 
 class RandomPolicy(Policy):
     def __init__(self, action_shape: Tuple[int, ...], action_min: torch.Tensor, action_max: torch.Tensor):

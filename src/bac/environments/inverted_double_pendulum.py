@@ -2,24 +2,26 @@ import torch
 import gymnasium as gym
 from typing import Tuple, Any
 
-from environments.environment import Environment
+from bac.environments.environment import Environment
 
-class Pendulum(Environment):
+class InvertedDoublePendulum(Environment):
     def __init__(self, render_mode: str = "rgb_array", device: torch.device = torch.device("cpu")):
-        self.env = gym.make("Pendulum-v1", render_mode=render_mode)
+        self.env = gym.make("InvertedDoublePendulum-v5", render_mode=render_mode)
         self.device = device
 
+        self.env.reset(seed=torch.randint(0, 1 << 32, (1,), dtype=torch.int64).item())
+
     def state_shape(self) -> Tuple[int, ...]:
-        return (3, )
+        return (9, )
 
     def action_shape(self) -> Tuple[int, ...]:
         return (1, )
     
     def action_min(self) -> torch.Tensor:
-        return torch.tensor([-2.0], dtype=torch.float32, device=self.device)
+        return torch.tensor([-1.0], dtype=torch.float32, device=self.device)
 
     def action_max(self) -> torch.Tensor:
-        return torch.tensor([2.0], dtype=torch.float32, device=self.device)
+        return torch.tensor([1.0], dtype=torch.float32, device=self.device)
 
     def reset(self) -> torch.Tensor:
         observation, _ = self.env.reset()

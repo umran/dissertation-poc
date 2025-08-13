@@ -1,10 +1,11 @@
 import torch
+from tqdm import tqdm
 from typing import Optional
 
-from algorithms.common import ReplayBuffer, ObserverType
-from algorithms.random_policy import RandomPolicy
-from algorithms.actor_critic import ActorCritic
-from environments.environment import Environment
+from bac.algorithms.common import ReplayBuffer, ObserverType
+from bac.algorithms.random_policy import RandomPolicy
+from bac.environments.environment import Environment
+from .actor_critic import ActorCritic
 
 class VanillaActorCritic:
     def __init__(
@@ -42,11 +43,7 @@ class VanillaActorCritic:
         policy = self.actor_critic.get_exploration_policy()
         state = self.env.reset()
 
-        for step in range(steps):
-            # coarse progress tracking
-            if step % 10_000 == 0:
-                print(step)
-
+        for step in tqdm(range(steps)):
             if step < start_steps:
                 action = self.random_policy.action(state)
             else:
@@ -56,7 +53,7 @@ class VanillaActorCritic:
             done = term or trunc
 
             # append state, action, reward, done, next_state to replay buffer
-            replay_buffer.add(state, action, reward, next_state, term)
+            replay_buffer.add(state, action, reward, next_state, term.to(torch.float32))
 
             if done:
                 # we've reached the end of an episode
