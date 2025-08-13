@@ -1,7 +1,7 @@
 import torch
 
 from bac.algorithms.actor_critic import TD3
-from bac.environments.pendulum import Pendulum
+from bac.environments import Pendulum
 from bac.manifest import Manifest
 
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")

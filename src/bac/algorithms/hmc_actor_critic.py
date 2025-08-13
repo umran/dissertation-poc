@@ -11,12 +11,11 @@ from typing import Tuple, List, Optional
 
 from bac.algorithms.common import ReplayBuffer, EpisodicReplayBuffer, ObserverType, SampleObserverType, copy_params
 from bac.algorithms.networks import PolicyNetwork, QNetwork
-from bac.algorithms.policy import Policy
-from bac.algorithms.random_policy import RandomPolicy
+from bac.algorithms.policy import Policy, RandomPolicy
 from bac.algorithms.actor_critic import ActorCritic
-from bac.environments.environment import Environment
+from bac.environments import Environment
 
-class HybridHMC:
+class HMCActorCritic:
     def __init__(
         self,
         env: Environment,

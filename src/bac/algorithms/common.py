@@ -5,7 +5,7 @@ from typing import Tuple, Optional, Dict, Callable, Any
 
 from bac.algorithms.policy import Policy
 from bac.algorithms.networks import QNetwork
-from bac.environments.environment import Environment
+from bac.environments import Environment
 
 class ReplayBuffer:
     def __init__(self, 
@@ -171,14 +171,14 @@ class EpisodicReplayBuffer:
         if self.size == 0:
             raise ValueError("Cannot sample from empty buffer")
         
-        # Step 1: Compute disagreement scores
+        # compute disagreement scores
         delta = compute_disagreement(q_net, self.states[:self.size], self.actions[:self.size], self.mc_returns[:self.size])
 
-        # Sort transitions by error in descending order
+        # sort transitions by error in descending order
         sorted_indices = torch.argsort(delta, descending=True)
 
         def sample_per(batch_size: int):
-            # Stratified sampling: divide into k segments of equal probability mass
+            # divide into k segments of equal probability mass
             segment_size = self.size // batch_size
             sample_indices = []
 
@@ -294,9 +294,6 @@ def polyak_update(target_net: nn.Module, source_net: nn.Module, p: float):
         target_param.data.copy_(p * target_param.data + (1 - p) * source_param.data)
 
 def compute_disagreement(q_net, states: torch.Tensor, actions: torch.Tensor, mc_returns: torch.Tensor, batch_size: int = 8192):
-    """
-    Computes |G - Q(s, a)| for large datasets in batches, avoiding OOM.
-    """
     N = states.shape[0]
     deltas = []
 
