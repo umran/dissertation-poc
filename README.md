@@ -4,7 +4,7 @@
 
 ## Hamiltonian Monte Carlo Based Posterior Estimation for Exploratory Action Selection in Off Policy Actor Critic Algorithms
 
-### Framework
+### Preliminaries
 
 #### Existing Actor Critic Networks
 
@@ -30,7 +30,17 @@ Some considerations:
 -   action selection using posterior estimates may be too poor for the first few steps (something to be determined, and will probably vary with the environment and problem to be solved)
 -   in such cases, perhaps allow initial learning to occur at a reasonable rate by falling back to action selection via additive Gaussian or OU noise, i.e, noise added directly to actions selected from the policy being learned.
 
-### Hamiltonian Monte Carlo
+<!-- about 500 words -->
+
+### Introduction
+
+<!-- about 3000 words -->
+
+### Literature and Technology Survey
+
+### HMC Actor Critic
+
+<!-- about 1000 words -->
 
 #### Theoretical Model
 
@@ -50,4 +60,36 @@ Sum_over_i_to_t_minus_i(gamma^i \* reward_t), where t is the duration of the epi
 
 The approximated Q posterior remains unchanged until a reapproximation occurs every K training steps, where during each approximation, theta_hat is assumed to be closer to the weights of the Q function under the optimal policy than it was during the previous approximation, on average (This is to do with the involvement of the actor-critic component, which carries out policy improvement according to the standard mechanics of actor-critic frameworks, covered elsewhere in this paper). Thus, the idea is that with each approximation, we induce a distribution over plausible Q functions around what can be thought of as the best guess we have so far. The hypothesis is that this approximates a distribution over plausible Q functions, which may include Q functions that remain unexplored and yet may be closer to the Q function under the optimal policy than any that may have been explored before.
 
+<!-- about 1000 words -->
+
 #### Implementation
+
+### Bootstrapped Actor Critic
+
+<!-- about 500 words -->
+
+#### Theoretical Model
+
+<!-- about 500 words -->
+
+#### Implementation
+
+<!-- about 1000 words -->
+
+### Methodology
+
+<!-- about 500 words -->
+
+### Experiments
+
+<!-- about 1000 words -->
+
+### Results and Analysis
+
+<!-- about 500 words -->
+
+### Conclusions
+
+<!-- about 500 words -->
+
+### Future Work
