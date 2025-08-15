@@ -81,34 +81,10 @@ HMC_AC_LARGE_100_5K = {
     "episodic_replay_buffer_size": 1_000_000,
 }
 
-HMC_AC_XLARGE_100_5K = {
-    "batch_size": 8192,
-    "num_warmup": 500,
-    "num_samples": 1000,
-    "update_every": 5_000,
-    "exploration_policy_lr": 1e-2,
-    "exploration_policy_optimization_steps": 100,
-    "exploration_policy_optimization_batch_size": 128,
-    "replay_buffer_size": 1_000_000,
-    "episodic_replay_buffer_size": 1_000_000,
-}
-
 class Manifest:
     def __init__(self, outdir: str, device: torch.device = torch.device("cpu")):
         self.outdir = outdir
         self.device = device
-
-    def xl(self, prefix: str, environment_cls: Type[Environment], actor_critic_cls: Type[ActorCritic], steps: int):
-        xl_results_url = self.make_url(prefix, "xl_results")
-
-        if not os.path.isfile(xl_results_url):
-            xl, xl_observer, xl_results, xl_sample_observer, xl_posterior_samples = self.prepare_hmc_actor_critic(environment_cls, actor_critic_cls)      
-            xl.train(steps=steps, observer=xl_observer, sample_observer=xl_sample_observer, **HMC_AC_XLARGE_100_5K)
-
-            xl_posterior_samples_url = self.make_url(prefix, "xl_posterior_samples")
-
-            save_to_npy(xl_results, xl_results_url)
-            save_to_npy(xl_posterior_samples, xl_posterior_samples_url)
 
     def baselines(self, prefix: str, environment_cls: Type[Environment], actor_critic_cls: Type[ActorCritic], steps: int):
         vanilla_results_url = self.make_url(prefix, "vanilla_results")
