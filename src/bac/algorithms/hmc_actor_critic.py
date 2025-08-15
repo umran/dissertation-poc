@@ -327,7 +327,7 @@ def torch_to_jax(t: torch.Tensor) -> jax.Array:
     return jnp.asarray(t.cpu().numpy())
 
 def jax_to_torch(x: jax.Array, device: torch.device) -> torch.Tensor:
-    jdev = x.device()
+    jdev = x.device
     plat = getattr(jdev, "platform", None)
     jid  = getattr(jdev, "id", None)
 
