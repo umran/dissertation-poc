@@ -4,6 +4,7 @@ import torch.optim as optim
 from torch.optim.lr_scheduler import OneCycleLR
 import jax
 import jax.numpy as jnp
+import jax.dlpack as jdl
 import numpyro
 import numpyro.distributions as dist
 from numpyro.infer import MCMC, NUTS
@@ -141,9 +142,9 @@ class HMCActorCritic:
         sample_per = episodic_replay_buffer.new_per_sampler(q_net)
         state, action, _, mc_return, _, _ = sample_per(batch_size)
 
-        state = jnp.array(state.cpu().numpy())
-        action = jnp.array(action.cpu().numpy())
-        target = jnp.array(mc_return.cpu().numpy())
+        state = torch_to_jax(state)
+        action = torch_to_jax(action)
+        target = torch_to_jax(mc_return)
 
         prior_params = None
         if self.q_weight_posterior is not None:
@@ -183,7 +184,7 @@ class HMCActorCritic:
         # sample a set of q network parameters from mcmc samples
         idx = jax.random.randint(self.next_rng_key(), shape=(), minval=0, maxval=self.q_weight_posterior['layer1_w'].shape[0])
         q_params = {
-            k: jax.device_get(v[idx])  # Convert from JAX DeviceArray
+            k: jax_to_torch(v[idx], device=self.device)
             for k, v in self.q_weight_posterior.items()
         }
 
@@ -202,7 +203,7 @@ class HMCActorCritic:
             anneal_strategy="cos",
             div_factor=10.0,
             final_div_factor=1000.0,
-            cycle_momentum=False,   # important for Adam/AdamW
+            cycle_momentum=False
         )
 
         sample_per = episodic_replay_buffer.new_per_sampler(q_net)
@@ -229,7 +230,7 @@ class SampledQNetwork(nn.Module):
     def __init__(self, weights):
         super().__init__()
         self.weights = nn.ParameterDict({
-            k: nn.Parameter(torch.tensor(v, dtype=torch.float32), requires_grad=False)
+            k: nn.Parameter(v, requires_grad=False)
             for k, v in weights.items()
         })
 
@@ -296,7 +297,7 @@ def linear(name, x, in_dim, out_dim, prior=None):
 
 def extract_qnetwork_params(q_model: QNetwork):
     param_dict = {
-        name: param.clone().detach().cpu().numpy()
+        name: torch_to_jax(param)
         for name, param in q_model.named_parameters()
     }
 
@@ -310,3 +311,35 @@ def extract_qnetwork_params(q_model: QNetwork):
             "b": param_dict['core.2.bias'],
         },
     }
+
+def torch_to_jax(t: torch.Tensor) -> jax.Array:
+    t = t.detach().contiguous()
+    d = t.device
+
+    if d.type == "cpu":
+        return jdl.from_dlpack(torch.utils.dlpack.to_dlpack(t))
+
+    if d.type == "cuda":
+        jax_gpu_ids = {getattr(dev, "id", None) for dev in jax.devices("gpu")}
+        if d.index in jax_gpu_ids:
+            return jdl.from_dlpack(torch.utils.dlpack.to_dlpack(t))
+
+    return jnp.asarray(t.cpu().numpy())
+
+def jax_to_torch(x: jax.Array, device: torch.device) -> torch.Tensor:
+    jdev = x.device()
+    plat = getattr(jdev, "platform", None)
+    jid  = getattr(jdev, "id", None)
+
+    if plat == "cpu" and device.type == "cpu":
+        return torch.utils.dlpack.from_dlpack(x)
+
+    if plat == "gpu" and device.type == "cuda":
+        if device.index is None or device.index == jid:
+            return torch.utils.dlpack.from_dlpack(x)
+        
+        t = torch.utils.dlpack.from_dlpack(x)
+        return t.to(device)
+
+    host = jax.device_get(x)
+    return torch.as_tensor(host).to(device)
