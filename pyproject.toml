@@ -23,4 +23,4 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-gpu = ["jax[cuda12]", "numpyro[cuda]"]
+jax_cuda = ["jax[cuda12]", "numpyro[cuda]"]
