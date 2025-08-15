@@ -12,5 +12,6 @@ if torch.cuda.is_available():
 
 test = Manifest("./out/test", device=DEVICE)
 
+test.xl("td3_pendulum", Pendulum, TD3, 20_000)
 test.baselines("td3_pendulum", Pendulum, TD3, 20_000)
 test.ablation("td3_pendulum", Pendulum, TD3, 20_000)
