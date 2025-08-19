@@ -6,7 +6,7 @@ from bac.algorithms.policy import Policy
 from bac.algorithms.common import MaskedReplayBuffer, copy_params, polyak_update
 from bac.algorithms.networks import MultiHeadQNetwork, MultiHeadPolicyNetwork, QNetwork, PolicyNetwork
 from bac.environments import Environment
-from .actor_critic import ActorCritic, OptimalPolicy, ExplorationPolicy
+from .actor_critic import ActorCritic, ExplorationPolicy
 
 class BootstrappedDDPG(ActorCritic):
     def __init__(
@@ -43,10 +43,7 @@ class BootstrappedDDPG(ActorCritic):
         self.policy_optimizer = optim.Adam(self.policy_net.parameters(), lr=policy_lr)
 
         # define the optimal policy
-        self.optimal_policy = OptimalPolicy(self.policy_net)
-        
-        # define the exploration policy
-        self.exploration_policy = ExplorationPolicy(self.policy_net, exploration_noise, action_min, action_max)
+        self.optimal_policy = MeanPolicy(self.policy_net)
     
     def update(self, replay_buffer: MaskedReplayBuffer, steps: int, gamma: float):
         if len(replay_buffer) == 0:
@@ -96,13 +93,53 @@ class BootstrappedDDPG(ActorCritic):
         return self.optimal_policy
 
     def get_exploration_policy(self) -> Policy:
-        return self.exploration_policy
+        head_idx = torch.randint(low=0, high=self.n_heads, size=(1,)).item()
+        return ExplorationPolicy(self.policy_net, head_idx)
     
     def get_critic_network(self) -> QNetwork:
         pass
     
     def get_actor_network(self) -> PolicyNetwork:
         pass
+
+class MeanPolicy(Policy):
+    def __init__(self, policy_net):
+        self.policy_net = policy_net
+
+    def action(self, state: torch.Tensor) -> torch.Tensor:
+        if state.ndim == 1:
+            state = state.unsqueeze(0)  # [1, S]
+
+        # [B, H, A]
+        all_actions = self.policy_net(state)
+        # average over heads → [B, A]
+        mean_action = all_actions.mean(dim=1)
+
+        if mean_action.shape[0] == 1:
+            return mean_action.squeeze(0)  # [A]
+        
+        return mean_action
+
+class ExplorationPolicy(Policy):
+    def __init__(self, policy_net, head_idx: int):
+        self.policy_net = policy_net
+        self.head_idx = head_idx
+
+    def action(self, state: torch.Tensor) -> torch.Tensor:
+        """
+        state: [state_dim] or [B, state_dim]
+        returns: [action_dim] or [B, action_dim] from the fixed head
+        """
+        with torch.no_grad():
+            squeeze_back = False
+            if state.ndim == 1:
+                state = state.unsqueeze(0)
+                squeeze_back = True
+
+            all_actions = self.policy_net(state)      # [B, H, A]
+            a = all_actions[:, self.head_idx, :]     # [B, A]
+
+            return a.squeeze(0) if squeeze_back else a
 
 def masked_mean(x: torch.Tensor, mask: torch.Tensor) -> torch.Tensor:
     m = mask if x.dtype.is_floating_point else mask.float()
