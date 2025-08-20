@@ -1,23 +1,21 @@
 import torch
-import torch.nn as nn
 import torch.optim as optim
 
 from bac.algorithms.policy import Policy
 from bac.algorithms.common import MaskedReplayBuffer, copy_params, polyak_update
-from bac.algorithms.networks import MultiHeadQNetwork, MultiHeadPolicyNetwork, QNetwork, PolicyNetwork
+from bac.algorithms.networks import MultiHeadQNetwork, MultiHeadPolicyNetwork
 from bac.environments import Environment
-from .actor_critic import ActorCritic, ExplorationPolicy
+from .multi_head_actor_critic import MultiHeadActorCritic
 
-class BootstrappedDDPG(ActorCritic):
+class MultiHeadDDPG(MultiHeadActorCritic):
     def __init__(
         self,
         env: Environment,
+        n_heads: int = 1,
         batch_size: int = 128,
         polyak: float = 0.995,
         q_lr: float = 1e-4,
         policy_lr: float = 1e-4,
-        exploration_noise: float = 0.2,
-        n_heads: int = 1,
         device: torch.device = torch.device("cpu")
     ):
         state_shape = env.state_shape()
@@ -25,6 +23,7 @@ class BootstrappedDDPG(ActorCritic):
         action_min = env.action_min()
         action_max = env.action_max()
 
+        self.n_heads = n_heads
         self.q_net = MultiHeadQNetwork(state_shape[0], action_shape[0], n_heads).to(device)
         self.q_net_target = MultiHeadQNetwork(state_shape[0], action_shape[0], n_heads).to(device)
         self.policy_net = MultiHeadPolicyNetwork(state_shape[0], action_shape[0], action_min, action_max, n_heads).to(device)
@@ -53,33 +52,28 @@ class BootstrappedDDPG(ActorCritic):
             state, action, reward, next_state, done, mask = replay_buffer.sample(self.batch_size)
 
             with torch.no_grad():
-                # Target actions per head: [B, H, A]
-                a_next = self.policy_net_target(next_state)                           # [B,H,A]
-                # Target Q per head at next state-action: [B, H]
-                q_next = self.q_net_target(next_state, a_next).squeeze(-1)           # [B,H]
-                r = reward.squeeze(-1)                                               # [B]
-                d = done.squeeze(-1)                                                 # [B]
-                target = r[:, None] + gamma * (1.0 - d[:, None]) * q_next            # [B,H]
+                a_next = self.policy_net_target(next_state)
+                q_next = self.q_net_target(next_state, a_next).squeeze(-1)
+                r = reward.squeeze(-1)
+                d = done.squeeze(-1)
+                target = r[:, None] + gamma * (1.0 - d[:, None]) * q_next
 
-            # Pred Q per head at (s, a_behavior): expand a across heads
-            a_b = action.unsqueeze(1).expand(-1, self.n_heads, -1)                   # [B,H,A]
-            q_pred = self.q_net(state, a_b).squeeze(-1)                              # [B,H]
+            a_b = action.unsqueeze(1).expand(-1, self.n_heads, -1)
+            q_pred = self.q_net(state, a_b).squeeze(-1)
 
-            # ----- Critic update (masked MSE) -----
-            se = (q_pred - target).pow(2)                                            # [B,H]
-            q_loss = masked_mean(se, mask)                                          # scalar
+            se = (q_pred - target).pow(2)
+            q_loss = masked_mean(se, mask)
 
             if mask.sum() == 0:
-                # No active (b,h) in this batch → skip both updates
                 continue
 
             self.q_optimizer.zero_grad(set_to_none=True)
             q_loss.backward()
             self.q_optimizer.step()
 
-            a_pi = self.policy_net(state)                                            # [B,H,A]
-            q_pi = self.q_net(state, a_pi).squeeze(-1)                               # [B,H]
-            policy_loss = -masked_mean(q_pi, mask)                                   # scalar
+            a_pi = self.policy_net(state)
+            q_pi = self.q_net(state, a_pi).squeeze(-1)
+            policy_loss = -masked_mean(q_pi, mask)
 
             self.policy_optimizer.zero_grad(set_to_none=True)
             policy_loss.backward()
@@ -94,13 +88,16 @@ class BootstrappedDDPG(ActorCritic):
 
     def get_exploration_policy(self) -> Policy:
         head_idx = torch.randint(low=0, high=self.n_heads, size=(1,)).item()
-        return ExplorationPolicy(self.policy_net, head_idx)
+        return SampledPolicy(self.policy_net, head_idx)
     
-    def get_critic_network(self) -> QNetwork:
-        pass
+    def get_critic_network(self) -> MultiHeadQNetwork:
+        return self.q_net
     
-    def get_actor_network(self) -> PolicyNetwork:
-        pass
+    def get_actor_network(self) -> MultiHeadPolicyNetwork:
+        return self.policy_net
+    
+    def get_n_heads(self):
+        return self.n_heads
 
 class MeanPolicy(Policy):
     def __init__(self, policy_net):
@@ -108,36 +105,30 @@ class MeanPolicy(Policy):
 
     def action(self, state: torch.Tensor) -> torch.Tensor:
         if state.ndim == 1:
-            state = state.unsqueeze(0)  # [1, S]
+            state = state.unsqueeze(0)
 
-        # [B, H, A]
         all_actions = self.policy_net(state)
-        # average over heads → [B, A]
         mean_action = all_actions.mean(dim=1)
 
         if mean_action.shape[0] == 1:
-            return mean_action.squeeze(0)  # [A]
+            return mean_action.squeeze(0)
         
         return mean_action
 
-class ExplorationPolicy(Policy):
+class SampledPolicy(Policy):
     def __init__(self, policy_net, head_idx: int):
         self.policy_net = policy_net
         self.head_idx = head_idx
 
     def action(self, state: torch.Tensor) -> torch.Tensor:
-        """
-        state: [state_dim] or [B, state_dim]
-        returns: [action_dim] or [B, action_dim] from the fixed head
-        """
         with torch.no_grad():
             squeeze_back = False
             if state.ndim == 1:
                 state = state.unsqueeze(0)
                 squeeze_back = True
 
-            all_actions = self.policy_net(state)      # [B, H, A]
-            a = all_actions[:, self.head_idx, :]     # [B, A]
+            all_actions = self.policy_net(state)
+            a = all_actions[:, self.head_idx, :]
 
             return a.squeeze(0) if squeeze_back else a
 

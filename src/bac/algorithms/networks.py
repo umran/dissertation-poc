@@ -28,8 +28,8 @@ class PolicyNetwork(nn.Module):
         assert action_min.shape == (action_dim,)
         assert action_max.shape == (action_dim,)
 
-        self.action_min = action_min
-        self.action_max = action_max
+        self.register_buffer("action_min", action_min.clone().detach())
+        self.register_buffer("action_max", action_max.clone().detach())
 
         self.core = nn.Sequential(
             nn.Linear(state_dim, 32),
@@ -41,12 +41,12 @@ class PolicyNetwork(nn.Module):
     
     def forward(self, state):
         raw = torch.tanh(self.core(state))
-
-        action_min = self.action_min
-        action_max = self.action_max
-
-        scaled = 0.5 * (raw + 1.0) * (action_max - action_min) + action_min
+        scaled = self._scale(raw) 
+        
         return scaled
+
+    def _scale(self, raw: torch.Tensor) -> torch.Tensor:
+        return 0.5 * (raw + 1.0) * (self.action_max - self.action_min) + self.action_min
 
 class MultiHeadQNetwork(nn.Module):
     def __init__(self, state_dim: int, action_dim: int, n_heads: int):
@@ -73,15 +73,26 @@ class MultiHeadQNetwork(nn.Module):
         ])
     
     def forward(self, state: torch.Tensor, action: torch.Tensor) -> torch.Tensor:
-        """
-        state:  [B, state_dim]
-        action: [B, action_dim]
-        returns: Q per head -> [B, H, 1]
-        """
-        x = torch.cat([state, action], dim=-1)       # [B, state+action]
-        z = self.core(x)                              # [B, 32]
-        outs = [head(z) for head in self.heads]       # list of [B, 1]
-        return torch.stack(outs, dim=1)
+        if action.dim() == 2:
+            # one action for all heads
+            x = torch.cat([state, action], dim=-1)
+            z = self.core(x)
+            outs = [head(z) for head in self.heads]
+            return torch.stack(outs, dim=1)
+
+        elif action.dim() == 3:
+            B, H, A = action.shape
+            assert H == self.n_heads, f"action has {H} heads, expected {self.n_heads}"
+            
+            # expand state per head and run shared core on (s, a_h)
+            x = torch.cat([state.unsqueeze(1).expand(-1, H, -1), action], dim=-1)
+            z = self.core(x)
+            outs = [self.heads[h](z[:, h, :]) for h in range(self.n_heads)]
+            
+            return torch.stack(outs, dim=1)
+
+        else:
+            raise ValueError(f"Unsupported action.dim()={action.dim()}; expected 2 or 3")
 
 class MultiHeadPolicyNetwork(nn.Module):
     def __init__(
@@ -100,7 +111,6 @@ class MultiHeadPolicyNetwork(nn.Module):
         self.n_heads = n_heads
         self.action_dim = action_dim
 
-        # register as buffers so they follow .to(device), save/load, etc.
         self.register_buffer("action_min", action_min.clone().detach())
         self.register_buffer("action_max", action_max.clone().detach())
 
@@ -122,22 +132,13 @@ class MultiHeadPolicyNetwork(nn.Module):
             for _ in range(n_heads)
         ])
 
-    def _scale(self, raw: torch.Tensor) -> torch.Tensor:
-        """
-        raw: tanh output in [-1, 1], shape [..., action_dim]
-        returns scaled to [action_min, action_max], same leading dims as raw
-        """
-        # Broadcast action bounds across batch and heads
-        return 0.5 * (raw + 1.0) * (self.action_max - self.action_min) + self.action_min
-
     def forward(self, state: torch.Tensor) -> torch.Tensor:
-        """
-        state: [B, state_dim]
-        returns per-head actions scaled to bounds: [B, H, action_dim]
-        """
-        z = self.core(state)  # [B, 32]
-        outs = [head(z) for head in self.heads]           # list of [B, A]
-        raw = torch.tanh(torch.stack(outs, dim=1))        # [B, H, A] in [-1,1]
-        # scale per action dim (broadcast over B,H)
-        scaled = self._scale(raw)                         # [B, H, A]
+        z = self.core(state)
+        outs = [head(z) for head in self.heads]
+        raw = torch.tanh(torch.stack(outs, dim=1))
+        scaled = self._scale(raw)
+
         return scaled
+    
+    def _scale(self, raw: torch.Tensor) -> torch.Tensor:
+        return 0.5 * (raw + 1.0) * (self.action_max - self.action_min) + self.action_min
