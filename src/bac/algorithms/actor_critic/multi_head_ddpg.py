@@ -5,7 +5,7 @@ from bac.algorithms.policy import Policy
 from bac.algorithms.common import MaskedReplayBuffer, copy_params, polyak_update
 from bac.algorithms.networks import MultiHeadQNetwork, MultiHeadPolicyNetwork
 from bac.environments import Environment
-from .multi_head_actor_critic import MultiHeadActorCritic
+from .multi_head_actor_critic import MultiHeadActorCritic, OptimalPolicy, SampledPolicy, NoisyPolicy
 
 class MultiHeadDDPG(MultiHeadActorCritic):
     def __init__(
@@ -16,6 +16,7 @@ class MultiHeadDDPG(MultiHeadActorCritic):
         polyak: float = 0.995,
         q_lr: float = 1e-4,
         policy_lr: float = 1e-4,
+        exploration_noise: float = 0.2,
         device: torch.device = torch.device("cpu")
     ):
         state_shape = env.state_shape()
@@ -42,7 +43,10 @@ class MultiHeadDDPG(MultiHeadActorCritic):
         self.policy_optimizer = optim.Adam(self.policy_net.parameters(), lr=policy_lr)
 
         # define the optimal policy
-        self.optimal_policy = MeanPolicy(self.policy_net)
+        self.optimal_policy = OptimalPolicy(self.policy_net)
+
+        # set a noisy exploration policy for when n_heads = 1
+        self.exploration_policy = NoisyPolicy(self.policy_net, exploration_noise, action_min, action_max)
     
     def update(self, replay_buffer: MaskedReplayBuffer, steps: int, gamma: float):
         if len(replay_buffer) == 0:
@@ -87,6 +91,9 @@ class MultiHeadDDPG(MultiHeadActorCritic):
         return self.optimal_policy
 
     def get_exploration_policy(self) -> Policy:
+        if self.n_heads == 1:
+            return self.exploration_policy
+        
         head_idx = torch.randint(low=0, high=self.n_heads, size=(1,)).item()
         return SampledPolicy(self.policy_net, head_idx)
     
@@ -98,39 +105,6 @@ class MultiHeadDDPG(MultiHeadActorCritic):
     
     def get_n_heads(self):
         return self.n_heads
-
-class MeanPolicy(Policy):
-    def __init__(self, policy_net):
-        self.policy_net = policy_net
-
-    def action(self, state: torch.Tensor) -> torch.Tensor:
-        if state.ndim == 1:
-            state = state.unsqueeze(0)
-
-        all_actions = self.policy_net(state)
-        mean_action = all_actions.mean(dim=1)
-
-        if mean_action.shape[0] == 1:
-            return mean_action.squeeze(0)
-        
-        return mean_action
-
-class SampledPolicy(Policy):
-    def __init__(self, policy_net, head_idx: int):
-        self.policy_net = policy_net
-        self.head_idx = head_idx
-
-    def action(self, state: torch.Tensor) -> torch.Tensor:
-        with torch.no_grad():
-            squeeze_back = False
-            if state.ndim == 1:
-                state = state.unsqueeze(0)
-                squeeze_back = True
-
-            all_actions = self.policy_net(state)
-            a = all_actions[:, self.head_idx, :]
-
-            return a.squeeze(0) if squeeze_back else a
 
 def masked_mean(x: torch.Tensor, mask: torch.Tensor) -> torch.Tensor:
     m = mask if x.dtype.is_floating_point else mask.float()

@@ -51,9 +51,12 @@ class MaskedReplayBuffer:
         assert next_states.shape == (batch_size, *self.next_states.shape[1:])
         assert terms.shape == (batch_size, 1)
 
-        masks = torch.bernoulli(
-            torch.full((batch_size, self.n_heads), self.p, dtype=torch.float32, device=self.device)
-        )
+        if self.n_heads == 1:
+            masks = torch.ones((batch_size, 1), dtype=torch.float32, device=self.device)
+        else:
+            masks = torch.bernoulli(
+                torch.full((batch_size, self.n_heads), self.p, dtype=torch.float32, device=self.device)
+            )
 
         end = self.ptr + batch_size
         if end <= self.capacity:

@@ -49,23 +49,30 @@ class PolicyNetwork(nn.Module):
         return 0.5 * (raw + 1.0) * (self.action_max - self.action_min) + self.action_min
 
 class MultiHeadQNetwork(nn.Module):
-    def __init__(self, state_dim: int, action_dim: int, n_heads: int):
+    def __init__(
+        self, 
+        state_dim: int, 
+        action_dim: int, 
+        n_heads: int, 
+        shared_core: bool = False
+    ):
         super(MultiHeadQNetwork, self).__init__()
 
         self.n_heads = n_heads
 
-        # shared core over (s, a)
-        self.core = nn.Sequential(
-            nn.Linear(state_dim + action_dim, 32),
-            nn.ReLU(),
-            nn.Linear(32, 32),
-            nn.ReLU()
-        )
+        if shared_core:
+            self.core = nn.Sequential(
+                nn.Linear(state_dim + action_dim, 32),
+                nn.ReLU(),
+                nn.Linear(32, 32),
+                nn.ReLU()
+            )
+        else:
+            self.core = nn.Identity()
 
-        # independent heads: (32 -> head_hidden -> 1)
         self.heads = nn.ModuleList([
             nn.Sequential(
-                nn.Linear(32, 16),
+                nn.Linear(32 if shared_core else state_dim + action_dim, 16),
                 nn.ReLU(),
                 nn.Linear(16, 1)
             )
@@ -101,7 +108,8 @@ class MultiHeadPolicyNetwork(nn.Module):
         action_dim: int,
         action_min: torch.Tensor,
         action_max: torch.Tensor,
-        n_heads: int
+        n_heads: int,
+        shared_core: bool = False
     ):
         super(MultiHeadPolicyNetwork, self).__init__()
         
@@ -114,18 +122,20 @@ class MultiHeadPolicyNetwork(nn.Module):
         self.register_buffer("action_min", action_min.clone().detach())
         self.register_buffer("action_max", action_max.clone().detach())
 
-        # shared core over state
-        self.core = nn.Sequential(
-            nn.Linear(state_dim, 32),
-            nn.ReLU(),
-            nn.Linear(32, 32),
-            nn.ReLU()
-        )
+        
+        if shared_core:
+            self.core = nn.Sequential(
+                nn.Linear(state_dim, 32),
+                nn.ReLU(),
+                nn.Linear(32, 32),
+                nn.ReLU()
+            )
+        else:
+            self.core = nn.Identity()
 
-        # independent head MLPs: 32 -> 16 -> action_dim
         self.heads = nn.ModuleList([
             nn.Sequential(
-                nn.Linear(32, 16),
+                nn.Linear(32 if shared_core else state_dim, 16),
                 nn.ReLU(),
                 nn.Linear(16, action_dim)
             )
