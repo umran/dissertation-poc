@@ -2,7 +2,7 @@ import torch
 import torch.optim as optim
 
 from bac.algorithms.policy import Policy
-from bac.algorithms.common import MaskedReplayBuffer, copy_params, polyak_update
+from bac.algorithms.common import MaskedReplayBuffer, copy_params, polyak_update, masked_mean
 from bac.algorithms.networks import MultiHeadQNetwork, MultiHeadPolicyNetwork
 from bac.environments import Environment
 from .multi_head_actor_critic import MultiHeadActorCritic, OptimalPolicy, SampledPolicy, NoisyPolicy
@@ -55,6 +55,9 @@ class MultiHeadDDPG(MultiHeadActorCritic):
         for _ in range(steps):
             state, action, reward, next_state, done, mask = replay_buffer.sample(self.batch_size)
 
+            if mask.sum() == 0:
+                continue
+
             with torch.no_grad():
                 a_next = self.policy_net_target(next_state)
                 q_next = self.q_net_target(next_state, a_next).squeeze(-1)
@@ -63,23 +66,18 @@ class MultiHeadDDPG(MultiHeadActorCritic):
                 target = r[:, None] + gamma * (1.0 - d[:, None]) * q_next
 
             a_b = action.unsqueeze(1).expand(-1, self.n_heads, -1)
+            
             q_pred = self.q_net(state, a_b).squeeze(-1)
-
             se = (q_pred - target).pow(2)
             q_loss = masked_mean(se, mask)
-
-            if mask.sum() == 0:
-                continue
-
-            self.q_optimizer.zero_grad(set_to_none=True)
+            self.q_optimizer.zero_grad()
             q_loss.backward()
             self.q_optimizer.step()
 
             a_pi = self.policy_net(state)
             q_pi = self.q_net(state, a_pi).squeeze(-1)
             policy_loss = -masked_mean(q_pi, mask)
-
-            self.policy_optimizer.zero_grad(set_to_none=True)
+            self.policy_optimizer.zero_grad()
             policy_loss.backward()
             self.policy_optimizer.step()
 
@@ -105,8 +103,3 @@ class MultiHeadDDPG(MultiHeadActorCritic):
     
     def get_n_heads(self):
         return self.n_heads
-
-def masked_mean(x: torch.Tensor, mask: torch.Tensor) -> torch.Tensor:
-    m = mask if x.dtype.is_floating_point else mask.float()
-    denom = m.sum().clamp_min(1.0)
-    return (x * m).sum() / denom

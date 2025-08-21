@@ -415,3 +415,8 @@ def compute_disagreement(q_net, states: torch.Tensor, actions: torch.Tensor, mc_
             deltas.append(delta_batch)
 
     return torch.cat(deltas, dim=0)
+
+def masked_mean(x: torch.Tensor, mask: torch.Tensor) -> torch.Tensor:
+    m = mask if x.dtype.is_floating_point else mask.float()
+    denom = m.sum().clamp_min(1.0)
+    return (x * m).sum() / denom
