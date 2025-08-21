@@ -1,7 +1,7 @@
 import torch
 
 from bac.algorithms.actor_critic import MultiHeadDDPG
-from bac.environments import Walker
+from bac.environments import Walker2D
 from bac.manifest import Manifest
 
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -12,4 +12,4 @@ if torch.cuda.is_available():
 
 test = Manifest("./out/test", device=DEVICE)
 
-test.bootstrapped("ddpg_walker", Walker, MultiHeadDDPG, 20_000)
+test.bootstrapped("ddpg_walker", Walker2D, MultiHeadDDPG, 20_000)
