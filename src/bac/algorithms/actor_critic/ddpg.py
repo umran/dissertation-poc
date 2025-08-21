@@ -6,7 +6,7 @@ from bac.algorithms.policy import Policy
 from bac.algorithms.common import ReplayBuffer, copy_params, polyak_update
 from bac.algorithms.networks import QNetwork, PolicyNetwork
 from bac.environments import Environment
-from .actor_critic import ActorCritic, OptimalPolicy, ExplorationPolicy
+from .actor_critic import ActorCritic, OptimalPolicy, NoisyPolicy
 
 class DDPG(ActorCritic):
     def __init__(
@@ -45,7 +45,7 @@ class DDPG(ActorCritic):
         self.optimal_policy = OptimalPolicy(self.policy_net)
         
         # define the exploration policy
-        self.exploration_policy = ExplorationPolicy(self.policy_net, exploration_noise, action_min, action_max)
+        self.exploration_policy = NoisyPolicy(self.policy_net, exploration_noise, action_min, action_max)
     
     def update(self, replay_buffer: ReplayBuffer, steps: int, gamma: float):
         if len(replay_buffer) == 0:

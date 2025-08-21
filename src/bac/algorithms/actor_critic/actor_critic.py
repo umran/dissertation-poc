@@ -34,7 +34,7 @@ class OptimalPolicy(Policy):
         with torch.no_grad():
             return self.policy_net(state)
 
-class ExplorationPolicy(Policy):
+class NoisyPolicy(Policy):
     def __init__(self, policy_net: PolicyNetwork, noise: float, action_min: torch.Tensor, action_max: torch.Tensor):
         self.policy_net = policy_net
         self.noise = noise

@@ -7,6 +7,99 @@ from bac.algorithms.policy import Policy
 from bac.algorithms.networks import QNetwork
 from bac.environments import Environment
 
+class MaskedReplayBuffer:
+    def __init__(self, 
+        capacity: int,
+        n_heads: int,
+        p: float,
+        state_shape: Tuple[int, ...], 
+        action_shape: Tuple[int, ...], 
+        state_dtype: torch.dtype = torch.float32, 
+        action_dtype: torch.dtype = torch.float32, 
+        device: torch.device = torch.device("cpu")
+    ):
+        self.capacity = capacity
+        self.n_heads = n_heads
+        self.p = p
+        self.device = device
+        self.state_dtype = state_dtype
+        self.action_dtype = action_dtype
+        self.ptr = 0
+        self.size = 0
+
+        self.states = torch.zeros((capacity, *state_shape), dtype=state_dtype, device=device)
+        self.actions = torch.zeros((capacity, *action_shape), dtype=action_dtype, device=device)
+        self.rewards = torch.zeros((capacity, 1), dtype=torch.float32, device=device)
+        self.next_states = torch.zeros((capacity, *state_shape), dtype=state_dtype, device=device)
+        self.terms = torch.zeros((capacity, 1), dtype=torch.float32, device=device)
+        self.masks = torch.zeros((capacity, n_heads), dtype=torch.float32, device=device)
+
+    def add(self, state, action, reward, next_state, term):
+        self.add_batch(
+            state.unsqueeze(0),
+            action.unsqueeze(0),
+            reward.view(1, 1),
+            next_state.unsqueeze(0),
+            term.view(1, 1)
+        )
+
+    def add_batch(self, states, actions, rewards, next_states, terms):
+        batch_size = states.shape[0]
+        assert states.shape == (batch_size, *self.states.shape[1:])
+        assert actions.shape == (batch_size, *self.actions.shape[1:])
+        assert rewards.shape == (batch_size, 1)
+        assert next_states.shape == (batch_size, *self.next_states.shape[1:])
+        assert terms.shape == (batch_size, 1)
+
+        if self.n_heads == 1:
+            masks = torch.ones((batch_size, 1), dtype=torch.float32, device=self.device)
+        else:
+            masks = torch.bernoulli(
+                torch.full((batch_size, self.n_heads), self.p, dtype=torch.float32, device=self.device)
+            )
+
+        end = self.ptr + batch_size
+        if end <= self.capacity:
+            self.states[self.ptr:end] = states
+            self.actions[self.ptr:end] = actions
+            self.rewards[self.ptr:end] = rewards
+            self.next_states[self.ptr:end] = next_states
+            self.terms[self.ptr:end] = terms
+            self.masks[self.ptr:end] = masks
+        else:
+            first = self.capacity - self.ptr
+            second = batch_size - first
+            self.states[self.ptr:] = states[:first]
+            self.actions[self.ptr:] = actions[:first]
+            self.rewards[self.ptr:] = rewards[:first]
+            self.next_states[self.ptr:] = next_states[:first]
+            self.terms[self.ptr:] = terms[:first]
+            self.masks[self.ptr:] = masks[:first]
+
+            self.states[:second] = states[first:]
+            self.actions[:second] = actions[first:]
+            self.rewards[:second] = rewards[first:]
+            self.next_states[:second] = next_states[first:]
+            self.terms[:second] = terms[first:]
+            self.masks[:second] = masks[first:]
+
+        self.ptr = (self.ptr + batch_size) % self.capacity
+        self.size = min(self.size + batch_size, self.capacity)
+
+    def sample(self, batch_size):
+        idx = torch.randint(0, self.size, (batch_size,), device=self.device)
+        return (
+            self.states[idx],
+            self.actions[idx],
+            self.rewards[idx],
+            self.next_states[idx],
+            self.terms[idx],
+            self.masks[idx]
+        )
+
+    def __len__(self):
+        return self.size
+
 class ReplayBuffer:
     def __init__(self, 
         capacity: int,
@@ -322,3 +415,8 @@ def compute_disagreement(q_net, states: torch.Tensor, actions: torch.Tensor, mc_
             deltas.append(delta_batch)
 
     return torch.cat(deltas, dim=0)
+
+def masked_mean(x: torch.Tensor, mask: torch.Tensor) -> torch.Tensor:
+    m = mask if x.dtype.is_floating_point else mask.float()
+    denom = m.sum().clamp_min(1.0)
+    return (x * m).sum() / denom
