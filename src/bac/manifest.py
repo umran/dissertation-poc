@@ -192,6 +192,26 @@ class Manifest:
         bs_20_p80_results_url = self.make_url(prefix, "bs_20_p80_results")
         bs_20_p95_results_url = self.make_url(prefix, "bs_20_p95_results")
 
+        # start temporary rearrangement
+        if not os.path.isfile(bs_20_p50_results_url):
+            bs_20_p50, bs_20_p50_observer, bs_20_p50_results = self.prepare_bs_actor_critic(environment_cls, actor_critic_cls, n_heads=BS_AC_20_P50["n_heads"])
+            bs_20_p50.train(p=BS_AC_20_P50["p"], steps=steps, observer=bs_20_p50_observer)
+            
+            save_to_npy(bs_20_p50_results, bs_20_p50_results_url)
+        
+        if not os.path.isfile(bs_20_p80_results_url):
+            bs_20_p80, bs_20_p80_observer, bs_20_p80_results = self.prepare_bs_actor_critic(environment_cls, actor_critic_cls, n_heads=BS_AC_20_P80["n_heads"])
+            bs_20_p80.train(p=BS_AC_20_P80["p"], steps=steps, observer=bs_20_p80_observer)
+            
+            save_to_npy(bs_20_p80_results, bs_20_p80_results_url)
+
+        if not os.path.isfile(bs_20_p95_results_url):
+            bs_20_p95, bs_20_p95_observer, bs_20_p95_results = self.prepare_bs_actor_critic(environment_cls, actor_critic_cls, n_heads=BS_AC_20_P95["n_heads"])
+            bs_20_p95.train(p=BS_AC_20_P95["p"], steps=steps, observer=bs_20_p95_observer)
+            
+            save_to_npy(bs_20_p95_results, bs_20_p95_results_url)
+        # end temporary rearrangement
+
         if not os.path.isfile(bs_1_p100_results_url):
             bs_1_p100, bs_1_p100_observer, bs_1_p100_results = self.prepare_bs_actor_critic(environment_cls, actor_critic_cls, n_heads=BS_AC_1_P100["n_heads"])
             bs_1_p100.train(p=BS_AC_1_P100["p"], steps=steps, observer=bs_1_p100_observer)
@@ -233,24 +253,6 @@ class Manifest:
             bs_10_p95.train(p=BS_AC_10_P95["p"], steps=steps, observer=bs_10_p95_observer)
             
             save_to_npy(bs_10_p95_results, bs_10_p95_results_url)
-
-        if not os.path.isfile(bs_20_p50_results_url):
-            bs_20_p50, bs_20_p50_observer, bs_20_p50_results = self.prepare_bs_actor_critic(environment_cls, actor_critic_cls, n_heads=BS_AC_20_P50["n_heads"])
-            bs_20_p50.train(p=BS_AC_20_P50["p"], steps=steps, observer=bs_20_p50_observer)
-            
-            save_to_npy(bs_20_p50_results, bs_20_p50_results_url)
-        
-        if not os.path.isfile(bs_20_p80_results_url):
-            bs_20_p80, bs_20_p80_observer, bs_20_p80_results = self.prepare_bs_actor_critic(environment_cls, actor_critic_cls, n_heads=BS_AC_20_P80["n_heads"])
-            bs_20_p80.train(p=BS_AC_20_P80["p"], steps=steps, observer=bs_20_p80_observer)
-            
-            save_to_npy(bs_20_p80_results, bs_20_p80_results_url)
-
-        if not os.path.isfile(bs_20_p95_results_url):
-            bs_20_p95, bs_20_p95_observer, bs_20_p95_results = self.prepare_bs_actor_critic(environment_cls, actor_critic_cls, n_heads=BS_AC_20_P95["n_heads"])
-            bs_20_p95.train(p=BS_AC_20_P95["p"], steps=steps, observer=bs_20_p95_observer)
-            
-            save_to_npy(bs_20_p95_results, bs_20_p95_results_url)
 
     def prepare_actor_critic(self, environment_cls: Type[Environment], actor_critic_cls: Type[ActorCritic]):
         ac = VanillaActorCritic(environment_cls(device=self.device), actor_critic_cls(environment_cls(device=self.device), device=self.device), device=self.device)
