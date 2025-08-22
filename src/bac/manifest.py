@@ -99,6 +99,24 @@ BS_AC_10_P95 = {
     "replay_buffer_size": 1_000_000,
 }
 
+BS_AC_20_P50 = {
+    "n_heads": 20,
+    "p": 0.5,
+    "replay_buffer_size": 1_000_000,
+}
+
+BS_AC_20_P80 = {
+    "n_heads": 20,
+    "p": 0.8,
+    "replay_buffer_size": 1_000_000,
+}
+
+BS_AC_20_P95 = {
+    "n_heads": 20,
+    "p": 0.95,
+    "replay_buffer_size": 1_000_000,
+}
+
 class Manifest:
     def __init__(self, outdir: str, device: torch.device = torch.device("cpu")):
         self.outdir = outdir
@@ -170,6 +188,9 @@ class Manifest:
         bs_10_p50_results_url = self.make_url(prefix, "bs_10_p50_results")
         bs_10_p80_results_url = self.make_url(prefix, "bs_10_p80_results")
         bs_10_p95_results_url = self.make_url(prefix, "bs_10_p95_results")
+        bs_20_p50_results_url = self.make_url(prefix, "bs_20_p50_results")
+        bs_20_p80_results_url = self.make_url(prefix, "bs_20_p80_results")
+        bs_20_p95_results_url = self.make_url(prefix, "bs_20_p95_results")
 
         if not os.path.isfile(bs_1_p100_results_url):
             bs_1_p100, bs_1_p100_observer, bs_1_p100_results = self.prepare_bs_actor_critic(environment_cls, actor_critic_cls, n_heads=BS_AC_1_P100["n_heads"])
@@ -212,6 +233,24 @@ class Manifest:
             bs_10_p95.train(p=BS_AC_10_P95["p"], steps=steps, observer=bs_10_p95_observer)
             
             save_to_npy(bs_10_p95_results, bs_10_p95_results_url)
+
+        if not os.path.isfile(bs_20_p50_results_url):
+            bs_20_p50, bs_20_p50_observer, bs_20_p50_results = self.prepare_bs_actor_critic(environment_cls, actor_critic_cls, n_heads=BS_AC_20_P50["n_heads"])
+            bs_20_p50.train(p=BS_AC_20_P50["p"], steps=steps, observer=bs_20_p50_observer)
+            
+            save_to_npy(bs_20_p50_results, bs_20_p50_results_url)
+        
+        if not os.path.isfile(bs_20_p80_results_url):
+            bs_20_p80, bs_20_p80_observer, bs_20_p80_results = self.prepare_bs_actor_critic(environment_cls, actor_critic_cls, n_heads=BS_AC_20_P80["n_heads"])
+            bs_20_p80.train(p=BS_AC_20_P80["p"], steps=steps, observer=bs_20_p80_observer)
+            
+            save_to_npy(bs_20_p80_results, bs_20_p80_results_url)
+
+        if not os.path.isfile(bs_20_p95_results_url):
+            bs_20_p95, bs_20_p95_observer, bs_20_p95_results = self.prepare_bs_actor_critic(environment_cls, actor_critic_cls, n_heads=BS_AC_20_P95["n_heads"])
+            bs_20_p95.train(p=BS_AC_20_P95["p"], steps=steps, observer=bs_20_p95_observer)
+            
+            save_to_npy(bs_20_p95_results, bs_20_p95_results_url)
 
     def prepare_actor_critic(self, environment_cls: Type[Environment], actor_critic_cls: Type[ActorCritic]):
         ac = VanillaActorCritic(environment_cls(device=self.device), actor_critic_cls(environment_cls(device=self.device), device=self.device), device=self.device)
@@ -322,6 +361,9 @@ class Manifest:
         results_10 = []
         colors_10 = []
 
+        results_20 = []
+        colors_20 = []
+
         results_p50 = []
         colors_p50 = []
 
@@ -375,6 +417,24 @@ class Manifest:
 
                     results_p95.append((data, "10H P95"))
                     colors_p95.append("yellow")
+                case "20_p50":
+                    results_20.append((data, "20H P50"))
+                    colors_20.append("pink")
+
+                    results_p50.append((data, "20H P50"))
+                    colors_p50.append("pink")
+                case "20_p80":
+                    results_20.append((data, "20H P80"))
+                    colors_20.append("brown")
+
+                    results_p80.append((data, "20H P80"))
+                    colors_p80.append("brown")
+                case "20_p95":
+                    results_20.append((data, "20H P95"))
+                    colors_20.append("violet")
+
+                    results_p95.append((data, "20H P95"))
+                    colors_p95.append("violet")
                 case "1_p100":
                     results_5.append((data, "Baseline"))
                     colors_5.append("black")
@@ -395,6 +455,7 @@ class Manifest:
 
         plot_performance(results_5, colors=colors_5, truncate_after=truncate_after, title="5 Bootstrapped Heads")
         plot_performance(results_10, colors=colors_10, truncate_after=truncate_after, title="10 Bootstrapped Heads")
+        plot_performance(results_20, colors=colors_20, truncate_after=truncate_after, title="20 Bootstrapped Heads")
         plot_performance(results_p50, colors=colors_p50, truncate_after=truncate_after, title="Bernoulli Mask 0.5")
         plot_performance(results_p80, colors=colors_p80, truncate_after=truncate_after, title="Bernoulli Mask 0.8")
         plot_performance(results_p95, colors=colors_p95, truncate_after=truncate_after, title="Bernoulli Mask 0.95")
