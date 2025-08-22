@@ -3,7 +3,7 @@ from pathlib import Path
 import torch
 from typing import Type, Optional
 
-from bac.util import save_to_npy, load_from_npy, plot_performance, plot_variance
+from bac.util import save_to_npy, load_from_npy, plot_performance, plot_variance, plot_cumulative_reward
 from bac.algorithms.common import new_observer, new_sample_observer
 from bac.algorithms.actor_critic import ActorCritic, MultiHeadActorCritic
 from bac.algorithms import HMCActorCritic, VanillaActorCritic, BootstrappedActorCritic
@@ -299,6 +299,7 @@ class Manifest:
                     pass
                 
         plot_performance(results, colors=colors, truncate_after=truncate_after)
+        plot_cumulative_reward(results, colors=colors, truncate_after=truncate_after)
         plot_variance(results, colors=colors, truncate_after=truncate_after)
     
     def plot_hmc_ablation(self, prefix: str, truncate_after: Optional[int] = None):
@@ -457,8 +458,19 @@ class Manifest:
                     pass
 
         plot_performance(results_5, colors=colors_5, truncate_after=truncate_after, title="5 Bootstrapped Heads")
+        plot_cumulative_reward(results_5, colors=colors_5, truncate_after=truncate_after, title="5 Bootstrapped Heads")
+
         plot_performance(results_10, colors=colors_10, truncate_after=truncate_after, title="10 Bootstrapped Heads")
+        plot_cumulative_reward(results_10, colors=colors_10, truncate_after=truncate_after, title="10 Bootstrapped Heads")
+
         plot_performance(results_20, colors=colors_20, truncate_after=truncate_after, title="20 Bootstrapped Heads")
+        plot_cumulative_reward(results_20, colors=colors_20, truncate_after=truncate_after, title="20 Bootstrapped Heads")
+
         plot_performance(results_p50, colors=colors_p50, truncate_after=truncate_after, title="Bernoulli Mask 0.5")
+        plot_cumulative_reward(results_p50, colors=colors_p50, truncate_after=truncate_after, title="Bernoulli Mask 0.5")
+
         plot_performance(results_p80, colors=colors_p80, truncate_after=truncate_after, title="Bernoulli Mask 0.8")
+        plot_cumulative_reward(results_p80, colors=colors_p80, truncate_after=truncate_after, title="Bernoulli Mask 0.8")
+
         plot_performance(results_p95, colors=colors_p95, truncate_after=truncate_after, title="Bernoulli Mask 0.95")
+        plot_cumulative_reward(results_p95, colors=colors_p95, truncate_after=truncate_after, title="Bernoulli Mask 0.95")

@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 def plot_performance(
     benchmark_sets: List[Tuple[List[Dict[str, float]], str]],
     colors: List[str] = None,
-    title: str = "Performance Over Time",
+    title: str = "Episodic Reward Over Time",
     truncate_after: Optional[int] = None
 ):
     plt.figure(figsize=(10, 6))
@@ -39,7 +39,7 @@ def plot_performance(
 def plot_variance(
     benchmark_sets: List[Tuple[List[Dict[str, float]], str]],
     colors: List[str] = None,
-    title: str = "Variance Over Time",
+    title: str = "Variance in Episodic Reward",
     truncate_after: Optional[int] = None
 ):
     plt.figure(figsize=(10, 6))
@@ -58,7 +58,37 @@ def plot_variance(
         plt.plot(steps, sds, label=label, color=color)
 
     plt.xlabel("Step")
-    plt.ylabel("Reward Variance")
+    plt.ylabel("Variance")
+    plt.title(title)
+    plt.legend()
+    plt.grid(True)
+    plt.tight_layout()
+    plt.show()
+
+def plot_cumulative_reward(
+    benchmark_sets: List[Tuple[List[Dict[str, float]], str]],
+    colors: List[str] = None,
+    title: str = "Cumulative Mean Episodic Reward",
+    truncate_after: Optional[int] = None
+):
+    plt.figure(figsize=(10, 6))
+
+    for i, (results, label) in enumerate(benchmark_sets):
+        steps = np.array([r["step"] for r in results])
+        means = np.array([r["mean"] for r in results])
+        cumulative_means = means.cumsum()
+
+        if truncate_after is not None:
+            mask = steps <= truncate_after
+            steps = steps[mask]
+            cumulative_means = cumulative_means[mask]
+
+        color = colors[i] if colors is not None and i < len(colors) else None
+
+        plt.plot(steps, cumulative_means, label=label, color=color)
+
+    plt.xlabel("Step")
+    plt.ylabel("Cumulative Episodic Reward")
     plt.title(title)
     plt.legend()
     plt.grid(True)
