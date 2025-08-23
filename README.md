@@ -52,6 +52,10 @@ where:
 P(D | theta) ~ Gaussian(f(x, theta), sigma), P(sigma) ~ HalfCauchy(1)
 P(theta | theta_hat, alpha) ~ Gaussian(theta_hat, alpha), P(alpha) ~ Gamma(1, 1)
 
+```math
+\begin{aligned} p(\theta,\boldsymbol{\alpha},\sigma \mid \mathcal D,\hat{\theta}) \ &\propto\ \underbrace{\prod_{i=1}^K \mathcal N\!\big(y_i \mid f(x_i;\theta),\,\sigma^2\big)}_{\text{data likelihood}} \;\times\; \underbrace{\prod_{j=1}^d \mathcal N\!\big(\theta_j \mid \hat{\theta}_j,\, \alpha_j^2\big)}_{\text{centered ARD prior}} \\[6pt] &\hspace{3.5cm}\times\; \underbrace{\prod_{j=1}^d p(\alpha_j)}_{\alpha_j^{-2}\sim \mathrm{Gamma}(1,1)} \;\times\; \underbrace{p(\sigma)}_{\sigma\sim \text{Half-Cauchy}(1)}. \end{aligned}
+```
+
 Note that the above model places an ARD-like prior on theta, where instead of centering around zero, we center around the prior parameter theta_hat. The intuition is that this expresses a preference for keeping most weights of the Q Network unchanged, while varying only the weights most likely to explain the data sampled during the current approximation.
 
 Notably, the data D (x, y) is a set of K transitions sampled from a replay buffer with the probability of a transition being drawn proportional to |f(D.x, theta_hat) - D.y| / Sum_over_transitions(|f(D.x, theta_hat) - D.y|). Also worth noting, is that transitions present in the replay buffer are generated as a result of acting greedily with respect to a Q function sampled from the approximated Q posterior for the entire duration of an episode, and so on for each traininig episode. An episode consists of a collection of transition tuples of the following form: (state, action, reward, next_state, done). The Monte Carlo return associated with the ith (state, action) pair in an episode is calculated as follows:
