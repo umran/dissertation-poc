@@ -31,7 +31,7 @@ We note that so far, given a linear $Q$ and fixed $\sigma$ and $\alpha$, the abo
 
 $$
 p(\theta, \sigma \mid D, \hat{\theta}, \alpha) \;\propto\;
-\Bigg[ \prod_{i=1}^{K} \mathcal{N}\!\big(y_i \mid f(x_i; \theta), \sigma^2\big) \Bigg]
+\Bigg[ \prod_{i=1}^{K} \mathcal{N}\!\big(y_i \mid Q(x_i; \theta), \sigma^2\big) \Bigg]
 \times
 \Bigg[ \prod_{j=1}^{d} \mathcal{N}\!\big(\theta_j \mid \hat{\theta}_j, \alpha^2\big) \Bigg]
 \times p(\sigma)
