@@ -2,19 +2,26 @@
 
 # Introduction
 
+We propose an interface for Bayesian exploration in existing Actor-Critic algorithms that accommodates the use of a compatible posterior-sampling method for action-selection during training, which we call Bayesian Actor Critic (BAC). Additionally, we propose specifications for and concrete implementations of two different algorithms that satisfy the BAC interface:
+
+-   Hamiltonian Monte Carlo Actor-Critic (HMC-AC)
+-   Bootstrapped Actor-Critic (BS-AC)
+
 <!-- about 3000 words -->
 
 # Literature and Technology Survey
 
+# Bayesian Actor Critic
+
 <!-- about 2000 words -->
 
-# HMC Actor Critic
+# Hamiltonian Monte Carlo Actor Critic (HMC-AC)
 
-At the heart of HMC Actor Critic is a Bayesian model used to continuously approximate a distribution over plausible Q-functions, centered around the Actor-Critic approximation of the optimal Q-function. Since the Actor-Critic approximation is non-stationary throughout training, and ideally moves closer to the true optimal Q-function, we design HMC Actor Critic so that the posterior over plausible Q-functions also shifts, so as to maintain diversity around the best approximation. Thus, the idea is that with each approximation, we induce a distribution over plausible Q functions around what can be thought of as the best guess we have so far, where the posterior ideally includes Q functions that remain unexplored and yet may be closer to the Q function under the optimal policy than any that may have been explored before.
+At the heart of HMC-AC is a Bayesian model used to continuously approximate a distribution over plausible Q-functions, centered around the Actor-Critic approximation of the optimal Q-function (Q\*). Since the Actor-Critic approximation is non-stationary throughout training, and ideally moves closer to the true optimal Q-function, we design HMC Actor Critic so that the posterior over plausible Q-functions also shifts, so as to maintain diversity around the most current approximation of Q\*. Thus, the idea is that with each approximation, we induce a distribution over plausible Q functions around what can be thought of as the best guess about Q\* we have so far, where the posterior ideally includes Q functions that remain unexplored and yet may be closer to Q\* than any that may have been explored in past episodes.
 
 ## Theoretical Model
 
-The exploration strategy used here involves maintaining an approximation of the Bayesian posterior over the parameters of plausible Q functions given approximated parameters $\hat{\theta}$ and Monte Carlo returns associated with state-action pairs observed during exploration $D = \{ (s_i, a_i, y_i) \}_{i=1}^{K}$.
+The exploration strategy used in HMC-AC involves maintaining an approximation of the Bayesian posterior over the parameters of plausible Q functions given approximated parameters $\hat{\theta}$ and Monte Carlo returns associated with state-action pairs observed during exploration $D = \{ (s_i, a_i, y_i) \}_{i=1}^{K}$.
 
 We begin to express this posterior with a Gaussian likelihood centered at $Q(s_i, a_i; \theta)$ with known noise $\sigma > 0$, and a Gaussian prior on $\theta$ centered at $\hat{\theta}$ with fixed width $\alpha > 0$.
 
