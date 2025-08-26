@@ -18,28 +18,28 @@ The exploration strategy used here involves maintaining an approximation of the 
 
 We begin to express this posterior with a Gaussian likelihood centered at $Q(s_i, a_i; \theta)$ with known noise $\sigma > 0$, and a Gaussian prior on $\theta$ centered at $\hat{\theta}$ with fixed width $\alpha > 0$.
 
-$$
+```math
 p(\theta \mid D, \hat{\theta}, \sigma, \alpha) \;\propto\;
 \prod_{i=1}^{K} \mathcal{N}\!\big(y_i \mid Q(s_i, a_i; \theta), \sigma^2\big)
 \times
 \prod_{j=1}^{d} \mathcal{N}\!\big(\theta_j \mid \hat{\theta}_j, \alpha^2\big)
-$$
+```
 
 In our setting, the “observations” are Monte Carlo returns generated under a sequence of exploratory policies, rather than samples from an optimal policy. Accordingly, the Gaussian likelihood should be interpreted not as a noise model around a fixed ground truth, but as a compatibility score between a candidate Q-function and the empirical mixture of returns obtained during exploration. The noise parameter $\sigma$ captures both stochasticity in the environment as well as the additional variability introduced by mixing across multiple policies. The resulting posterior therefore represents a distribution over Q-functions that are plausible given the trajectory of past policies, rather than one centered on a single optimal solution.
 
 We note that so far, given a linear $Q$ and fixed $\sigma$ and $\alpha$, the above posterior has a closed form solution. Making our model more robust to estimation of observation noise, we introduce an uninformative prior on sigma, which yields the following posterior:
 
-$$
+```math
 p(\theta, \sigma \mid D, \hat{\theta}, \alpha) \;\propto\;
 \Bigg[ \prod_{i=1}^{K} \mathcal{N}\!\big(y_i \mid Q(x_i; \theta), \sigma^2\big) \Bigg]
 \times
 \Bigg[ \prod_{j=1}^{d} \mathcal{N}\!\big(\theta_j \mid \hat{\theta}_j, \alpha^2\big) \Bigg]
 \times p(\sigma)
-$$
+```
 
-$$
+```math
 \sigma \sim \text{Gamma}(0, 0)
-$$
+```
 
 No longer conditioning on $\sigma$ and the introduction of the relatively broad prior on $\sigma$ results in a posterior that does not have a closed form solution even given a linear $Q$ function.
 
