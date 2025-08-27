@@ -263,9 +263,10 @@ def q_model(state, action, y=None, prior_params=None, h1_dim=64):
 
     if y is not None:
         assert y.shape == (n, 1)
-        sigma = numpyro.sample("sigma", dist.Gamma(1e-4, 1e-4))
+        log_sigma = numpyro.sample("log_sigma", dist.Uniform(-4, 4))
+        sigma = numpyro.deterministic("sigma", 10**log_sigma)
         with numpyro.plate("data", n):
-            numpyro.sample("y", dist.Normal(out.squeeze(-1), sigma), obs=y.squeeze(-1))
+            numpyro.sample("y", dist.Normal(out.squeeze(-1), scale=sigma), obs=y.squeeze(-1))
 
 def relu(x):
     return jnp.maximum(0, x)
