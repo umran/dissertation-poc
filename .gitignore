@@ -15,3 +15,5 @@ wheels/
 out/
 
 .ipynb_checkpoints/
+
+hmc_plots_local.ipynb

@@ -1,59 +1,56 @@
-# Bayesian Exploration in Actor Critic Frameworks
-
-## Bootstrapped Actor Critic as An Extension of Bootstrapped DQN (Osband et al)
-
-## Hamiltonian Monte Carlo Based Posterior Estimation for Exploratory Action Selection in Off Policy Actor Critic Algorithms
-
-### Preliminaries
-
-#### Existing Actor Critic Networks
-
-Use existing Actor Critic machinery to indirectly estimate the policy network via estimation of the Q Network
-
-#### Parallel HMC Based Q Network Estimation
-
-A process that runs in parallel, on an interval (every N steps for a sufficiently large N).
-Sample a subset of the Replay buffer of size d, at uniform random
-
--   use a MCMC sampler against the sampled subset to estimate a set of weights for the Q Network.
--   possibly use a model that incorporates both the Q Network and its corresponding Policy Network in order to simultaneously estimate a posterior over both networks
--   barring the above or alternatively, use the estimated posterior over the Q Network to sample a finite set of corresponding Policy Networks
-
-#### Exploratory Action Selection
-
-If a posterior over the policy network is estimated directly via MCMC, sample a policy network from that posterior.
-Else, if a subset of policy networks are sampled from the estimated posterior over Q Networks, sample a policy network at random. Then use the sampled policy network for action selection.
-
-Some considerations:
-
--   the posterior estimates will be lagging or may not be available at all until the first N steps
--   action selection using posterior estimates may be too poor for the first few steps (something to be determined, and will probably vary with the environment and problem to be solved)
--   in such cases, perhaps allow initial learning to occur at a reasonable rate by falling back to action selection via additive Gaussian or OU noise, i.e, noise added directly to actions selected from the policy being learned.
-
 <!-- about 500 words -->
 
-### Introduction
+# Introduction
+
+We propose an interface for Bayesian exploration in existing Actor-Critic algorithms that accommodates the use of a compatible posterior-sampling method for action-selection during training, which we call Bayesian Actor Critic (BAC). Additionally, we propose specifications for and concrete implementations of two different algorithms that satisfy the BAC interface:
+
+-   Hamiltonian Monte Carlo Actor-Critic (HMC-AC)
+-   Bootstrapped Actor-Critic (BS-AC)
 
 <!-- about 3000 words -->
 
-### Literature and Technology Survey
+# Literature and Technology Survey
 
-### HMC Actor Critic
+# Bayesian Actor Critic
 
-<!-- about 1000 words -->
+<!-- about 2000 words -->
 
-#### Theoretical Model
+# Hamiltonian Monte Carlo Actor Critic (HMC-AC)
 
-The exploration strategy used here involves maintaining an approximation of the following probability distribution, the posterior distribution over the weights of a Q function centered around some prior weights theta hat, given observed monte carlo returns associated with state action pairs visited in past episodes:
+At the heart of HMC-AC is a Bayesian model used to continuously approximate a distribution over plausible Q-functions, centered around the Actor-Critic approximation of the optimal Q-function (Q\*). Since the Actor-Critic approximation is non-stationary throughout training, and ideally moves closer to the true optimal Q-function, we design HMC Actor Critic so that the posterior over plausible Q-functions also shifts, so as to maintain diversity around the most current approximation of Q\*. Thus, the idea is that with each approximation, we induce a distribution over plausible Q functions around what can be thought of as the best guess about Q\* we have so far, where the posterior ideally includes Q functions that remain unexplored and yet may be closer to Q\* than any that may have been explored in past episodes.
 
-P(theta | D, theta_hat) ~ P(D | theta) P(theta | theta_hat, alpha) P(alpha)
+## Theoretical Model
 
-where:
-P(D | theta) ~ Gaussian(f(x, theta), sigma), P(sigma) ~ HalfCauchy(1)
-P(theta | theta_hat, alpha) ~ Gaussian(theta_hat, alpha), P(alpha) ~ Gamma(1, 1)
+The exploration strategy used in HMC-AC involves maintaining an approximation of the Bayesian posterior over the parameters of plausible Q functions given approximated parameters $\hat{\theta}$ and Monte Carlo returns associated with state-action pairs observed during exploration $D = \{ (s_i, a_i, y_i) \}_{i=1}^{K}$.
+
+We begin to express this posterior with a Gaussian likelihood centered at $Q(s_i, a_i; \theta)$ with known noise $\sigma > 0$, and a Gaussian prior on $\theta$ centered at $\hat{\theta}$ with fixed width $\alpha > 0$.
 
 ```math
-\begin{aligned} p(\theta,\boldsymbol{\alpha},\sigma \mid \mathcal D,\hat{\theta}) \ &\propto\ \underbrace{\prod_{i=1}^K \mathcal N\!\big(y_i \mid f(x_i;\theta),\,\sigma^2\big)}_{\text{data likelihood}} \;\times\; \underbrace{\prod_{j=1}^d \mathcal N\!\big(\theta_j \mid \hat{\theta}_j,\, \alpha_j^2\big)}_{\text{centered ARD prior}} \\[6pt] &\hspace{3.5cm}\times\; \underbrace{\prod_{j=1}^d p(\alpha_j)}_{\alpha_j^{-2}\sim \mathrm{Gamma}(1,1)} \;\times\; \underbrace{p(\sigma)}_{\sigma\sim \text{Half-Cauchy}(1)}. \end{aligned}
+p(\theta \mid D, \hat{\theta}, \sigma, \alpha) \;\propto\;
+\prod_{i=1}^{K} \mathcal N\!\big(y_i \mid Q(s_i, a_i; \theta), \sigma^2\big)
+\times
+\prod_{j=1}^{d} \mathcal N\!\big(\theta_j \mid \hat{\theta}_j, \alpha^2\big)
+```
+
+In our setting, the “observations” are Monte Carlo returns generated under a sequence of exploratory policies, rather than samples from an optimal policy. Accordingly, the Gaussian likelihood should be interpreted not as a noise model around a fixed ground truth, but as a compatibility score between a candidate Q-function and the empirical mixture of returns obtained during exploration. The noise parameter $\sigma$ captures both stochasticity in the environment as well as the additional variability introduced by mixing across multiple policies. The resulting posterior therefore represents a distribution over Q-functions that are plausible given the trajectory of past policies, rather than one centered on a single optimal solution.
+
+We note that so far, given a linear $Q$ and fixed $\sigma$ and $\alpha$, the above posterior has a closed form solution. Making our model more robust to estimation of observation noise, we introduce an uninformative prior on sigma, which yields the following posterior:
+
+```math
+p(\theta, \sigma \mid D, \hat{\theta}, \alpha) \;\propto\;
+\prod_{i=1}^{K} \mathcal N\!\big(y_i \mid Q(x_i; \theta), \sigma^2\big)
+\times \prod_{j=1}^{d} \mathcal N\!\big(\theta_j \mid \hat{\theta}_j, \alpha^2\big)
+\times p(\sigma)
+```
+
+```math
+\sigma \sim \text{Gamma}(0, 0)
+```
+
+No longer conditioning on $\sigma$ and the introduction of the relatively broad prior on $\sigma$ results in a posterior that does not have a closed form solution even given a linear $Q$ function.
+
+```math
+\begin{aligned} p(\theta,\boldsymbol{\alpha},\sigma \mid \mathcal D,\hat{\theta}) \ &\propto\ \underbrace{\prod_{i=1}^K \mathcal N\!\big(y_i \mid f(x_i;\theta),\,\sigma^2\big)}_{\text{data likelihood}} \;\times\; \underbrace{\prod_{j=1}^d \mathcal N\!\big(\theta_j \mid \hat{\theta}_j,\, \alpha_j^2\big)}_{\text{centered ARD prior}} \\[6pt] &\hspace{3.5cm}\times\; \underbrace{\prod_{j=1}^d p(\alpha_j)}_{\alpha_j^{-2}\sim \mathrm{Gamma}(0, 0)} \;\times\; \underbrace{p(\sigma)}_{\sigma\sim \text{Gamma}(0, 0)} \end{aligned}
 ```
 
 Note that the above model places an ARD-like prior on theta, where instead of centering around zero, we center around the prior parameter theta_hat. The intuition is that this expresses a preference for keeping most weights of the Q Network unchanged, while varying only the weights most likely to explain the data sampled during the current approximation.
@@ -62,38 +59,28 @@ Notably, the data D (x, y) is a set of K transitions sampled from a replay buffe
 
 Sum_over_k_to_T_minus_one_minus_i(gamma^k \* reward_i_plus_k), where i is the ith transition of the episode and T is the total number of transitions in the episode.
 
-The approximated Q posterior remains unchanged until a reapproximation occurs every K training steps, where during each approximation, theta_hat is assumed to be closer to the weights of the Q function under the optimal policy than it was during the previous approximation, on average (This is to do with the involvement of the actor-critic component, which carries out policy improvement according to the standard mechanics of actor-critic frameworks, covered elsewhere in this paper). Thus, the idea is that with each approximation, we induce a distribution over plausible Q functions around what can be thought of as the best guess we have so far. The hypothesis is that this approximates a distribution over plausible Q functions, which may include Q functions that remain unexplored and yet may be closer to the Q function under the optimal policy than any that may have been explored before.
+## Implementation
 
 <!-- about 1000 words -->
 
-#### Implementation
+# Bootstrapped Actor Critic
 
-### Bootstrapped Actor Critic
+## Theoretical Model
 
-<!-- about 500 words -->
-
-#### Theoretical Model
-
-<!-- about 500 words -->
-
-#### Implementation
+## Implementation
 
 <!-- about 1000 words -->
 
-### Methodology
+# Methodology
 
 <!-- about 500 words -->
 
-### Experiments
+# Experiments
 
 <!-- about 1000 words -->
 
-### Results and Analysis
+# Results and Discussion
 
-<!-- about 500 words -->
+<!-- about 1000 words -->
 
-### Conclusions
-
-<!-- about 500 words -->
-
-### Future Work
+# Conclusion and Future Work
