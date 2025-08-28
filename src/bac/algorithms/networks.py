@@ -72,9 +72,11 @@ class MultiHeadQNetwork(nn.Module):
 
         self.heads = nn.ModuleList([
             nn.Sequential(
-                nn.Linear(32 if shared_core else state_dim + action_dim, 16),
+                nn.Linear(32 if shared_core else state_dim + action_dim, 128),
                 nn.ReLU(),
-                nn.Linear(16, 1)
+                nn.Linear(128, 128),
+                nn.ReLU(),
+                nn.Linear(128, 1)
             )
             for _ in range(n_heads)
         ])
@@ -135,9 +137,11 @@ class MultiHeadPolicyNetwork(nn.Module):
 
         self.heads = nn.ModuleList([
             nn.Sequential(
-                nn.Linear(32 if shared_core else state_dim, 16),
+                nn.Linear(32 if shared_core else state_dim, 128),
                 nn.ReLU(),
-                nn.Linear(16, action_dim)
+                nn.Linear(128, 128),
+                nn.ReLU(),
+                nn.Linear(128, action_dim)
             )
             for _ in range(n_heads)
         ])
