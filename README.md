@@ -7,11 +7,15 @@ We propose an interface for Bayesian exploration in existing Actor-Critic algori
 -   Hamiltonian Monte Carlo Actor-Critic (HMC-AC)
 -   Bootstrapped Actor-Critic (BS-AC)
 
+We also conduct and report the results of experiments evaluating both HMC-AC and BS-AC, in benchmark OpenAI Gym environments for continuous control in the sections that follow.
+
 <!-- about 3000 words -->
 
 # Literature and Technology Survey
 
 # Bayesian Actor Critic
+
+We define Bayesian Actor Critic as a method of exploration in reinforcement learning in continuous action spaces that utilizes an Actor-Critic training loop as the primary learning mechanism, and a method of posterior sampling over plausible Q functions
 
 <!-- about 2000 words -->
 
@@ -84,3 +88,17 @@ Sum_over_k_to_T_minus_one_minus_i(gamma^k \* reward_i_plus_k), where i is the it
 <!-- about 1000 words -->
 
 # Conclusion and Future Work
+
+# Appendices
+
+## Appendix A - On Policy Actor Critic Algorithms
+
+## A.1 DDPG
+
+## A.2 TD3
+
+## Appendix B - Behaviour Policy Optimization in HMC
+
+## B.1 OneCycleLR
+
+## Appendix C - Alternatively Using Proper Gamma(1, 1) Priors
