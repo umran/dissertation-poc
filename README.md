@@ -15,7 +15,7 @@ We also conduct and report the results of experiments evaluating both HMC-AC and
 
 # Bayesian Actor Critic
 
-We define Bayesian Actor Critic as a method of exploration in reinforcement learning in continuous action spaces that utilizes an Actor-Critic training loop as the primary learning mechanism, and a method of posterior sampling over plausible Q functions
+We define Bayesian Actor Critic as a method of exploration in reinforcement learning in continuous action spaces that utilizes an Actor-Critic training loop as the primary learning mechanism, and a method of posterior sampling over plausible Q functions to obtain behaviour policies during exploration. The exploration strategy involves sampling a plausible Q function at the beginning of each episode, performing policy iteration to obtain a greedy behaviour policy with respect to the sampled Q-function, and following it for the duration of the episode. Throughout training, the Actor-Critic component periodically updates its approximation of the optimal Q function and policy using transitions observed during training.
 
 <!-- about 2000 words -->
 
@@ -25,7 +25,7 @@ At the heart of HMC-AC is a Bayesian model used to continuously approximate a di
 
 ## Theoretical Model
 
-The exploration strategy used in HMC-AC involves maintaining an approximation of the Bayesian posterior over the parameters of plausible Q functions given approximated parameters $\hat{\theta}$ and Monte Carlo returns associated with state-action pairs observed during exploration $D = \{ (s_i, a_i, y_i) \}_{i=1}^{K}$.
+The exploration strategy used in HMC-AC involves maintaining an approximation of the Bayesian posterior over the parameters of plausible Q functions given approximated parameters $\hat{\theta}$ and sample observations of Monte Carlo returns associated with state-action pairs from past behaviour policies.
 
 We begin to express this posterior with a Gaussian likelihood centered at $Q(s_i, a_i; \theta)$ with known noise $\sigma > 0$, and a Gaussian prior on $\theta$ centered at $\hat{\theta}$ with fixed width $\alpha > 0$.
 
@@ -36,9 +36,9 @@ p(\theta \mid D, \hat{\theta}, \sigma, \alpha) \;\propto\;
 \prod_{j=1}^{d} \mathcal N\!\big(\theta_j \mid \hat{\theta}_j, \alpha^2\big)
 ```
 
-In our setting, the “observations” are Monte Carlo returns generated under a sequence of exploratory policies, rather than samples from an optimal policy. Accordingly, the Gaussian likelihood should be interpreted not as a noise model around a fixed ground truth, but as a compatibility score between a candidate Q-function and the empirical mixture of returns obtained during exploration. The noise parameter $\sigma$ captures both stochasticity in the environment as well as the additional variability introduced by mixing across multiple policies. The resulting posterior therefore represents a distribution over Q-functions that are plausible given the trajectory of past policies, rather than one centered on a single optimal solution.
+In our setting, the “observations” are Monte Carlo returns generated under past exploratory policies, rather than samples from an optimal policy. Accordingly, the Gaussian likelihood should be interpreted not as a noise model around a fixed ground truth, but as a compatibility score between a candidate Q-function and the empirical mixture of returns obtained during exploration under various exploration policies. The noise parameter $\sigma$ captures both stochasticity in the environment as well as the additional variability introduced by mixing across multiple policies. The resulting posterior therefore represents a distribution over Q-functions that are plausible given the trajectory of past policies, rather than one centered on a single optimal solution.
 
-We note that so far, given a linear $Q$ and fixed $\sigma$ and $\alpha$, the above posterior has a closed form solution. Making our model more robust to estimation of observation noise, we introduce an uninformative prior on sigma, which yields the following posterior:
+We note that so far, given a linear $Q$ and fixed $\sigma$ and $\alpha$, the above posterior has a closed form solution. To make our model more robust to estimation of observation noise, we introduce an uninformative, log-uniform prior on sigma, which yields the following posterior:
 
 ```math
 p(\theta, \sigma \mid D, \hat{\theta}, \alpha) \;\propto\;
