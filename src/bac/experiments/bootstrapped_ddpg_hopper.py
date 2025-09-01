@@ -1,4 +1,5 @@
 import torch
+import argparse
 
 from bac.algorithms.actor_critic import MultiHeadDDPG
 from bac.environments import Hopper
@@ -6,10 +7,23 @@ from bac.manifest import Manifest
 
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-torch.manual_seed(100)
-if torch.cuda.is_available():
-    torch.cuda.manual_seed_all(100)
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--seed",
+        type=int,
+        required=True,
+        help="Random seed (integer, required)"
+    )
+    args = parser.parse_args()
+    seed = args.seed
 
-test = Manifest("./out/prod", device=DEVICE)
+    torch.manual_seed(seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(seed)
 
-test.bootstrapped("ddpg_hopper", Hopper, MultiHeadDDPG, 1_000_000)
+    prod = Manifest("./out/prod", device=DEVICE)
+    prod.bootstrapped(f"ddpg_hopper_{seed}", Hopper, MultiHeadDDPG, 1_000_000)
+
+if __name__ == "__main__":
+    main()
