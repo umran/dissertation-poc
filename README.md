@@ -21,13 +21,27 @@ We define Bayesian Actor Critic as a method of exploration in reinforcement lear
 
 # Hamiltonian Monte Carlo Actor Critic (HMC-AC)
 
-At the heart of HMC-AC is a Bayesian model used to continuously approximate a distribution over plausible Q-functions, centered around the Actor-Critic approximation of the optimal Q-function (Q\*). Since the Actor-Critic approximation is non-stationary throughout training, and ideally moves closer to the true optimal Q-function, we design HMC Actor Critic so that the posterior over plausible Q-functions also shifts, so as to maintain diversity around the most current approximation of Q\*. Thus, the idea is that with each approximation, we induce a distribution over plausible Q functions around what can be thought of as the best guess about Q\* we have so far, where the posterior ideally includes Q functions that remain unexplored and yet may be closer to Q\* than any that may have been explored in past episodes.
+HMC-AC uses a Bayesian model to approximate a distribution over plausible Q-functions, using the Actor-Critic approximation of the optimal Q-function (Q\*) as a prior. Since the Actor-Critic approximation is non-stationary throughout training, and ideally moves closer to the true optimal Q-function, we design HMC Actor Critic so that the posterior over plausible Q-functions is periodically reapproximated, so as to maintain diversity around the most current approximation of Q\*. Thus, the idea is that with each approximation, we induce a distribution over plausible Q functions around what can be thought of as the best guess about Q\* we have so far, where the posterior ideally includes Q functions that remain unexplored and yet may be closer to Q\* than any that may have been explored in past episodes.
 
 ## Theoretical Model
 
-The exploration strategy used in HMC-AC involves maintaining an approximation of the Bayesian posterior over the parameters of plausible Q functions given approximated parameters $\hat{\theta}$ and sample observations of Monte Carlo returns associated with state-action pairs from past behaviour policies.
+The exploration strategy used in HMC-AC involves maintaining an approximation of the Bayesian posterior over the parameters of plausible Q functions given approximated parameters $\hat{\theta}$ of Q\* (obtained via Actor-Critic updates, explained in section ?) and observations of discounted returns associated with state-action pairs from trajectories resulting from previously sampled behaviour policies. We formally define our observations as follows:
 
-We begin to express this posterior with a Gaussian likelihood centered at $Q(s_i, a_i; \theta)$ with known noise $\sigma > 0$, and a Gaussian prior on $\theta$ centered at $\hat{\theta}$ with fixed width $\alpha > 0$.
+$$
+\mathcal D \;=\; \big\{\, (s_i,\ a_i,\ G_i) \,\big\}_{i=1}^{N}
+$$
+
+For each episode $e$ with length $T_e$ and discount factor $\gamma\in[0,1)$, the return from
+time $t$ is
+
+$$
+G^{(e)}_t \;=\; \sum_{k=0}^{T_e-t-1} \gamma^{k}\, r^{(e)}_{t+k+1}.
+$$
+
+Since our environments involve continuous states and actions, we record one sample for **every** occurrence of a state–action pair within an episode, as opposed to _single-visit_ Monte Carlo, where only the first occurrence is recorded. Sutton and Barto show that in the limit, both approaches lead to an unbiased estimate of the state-action value given the behaviour policy. Thus our dataset contains triples
+$(s^{(e)}_t,\ a^{(e)}_t,\ G^{(e)}_t)$ for all $t=0,\ldots, T_e-1$ (and across all episodes).
+
+We may begin to express this posterior with a Gaussian likelihood centered at $Q(s_i, a_i; \theta)$ with known noise $\sigma > 0$, and a Gaussian prior on $\theta$ centered at $\hat{\theta}$ with fixed width $\alpha > 0$.
 
 ```math
 p(\theta \mid D, \hat{\theta}, \sigma, \alpha) \;\propto\;
@@ -36,9 +50,9 @@ p(\theta \mid D, \hat{\theta}, \sigma, \alpha) \;\propto\;
 \prod_{j=1}^{d} \mathcal N\!\big(\theta_j \mid \hat{\theta}_j, \alpha^2\big)
 ```
 
-In our setting, the “observations” are Monte Carlo returns generated under past exploratory policies, rather than samples from an optimal policy. Accordingly, the Gaussian likelihood should be interpreted not as a noise model around a fixed ground truth, but as a compatibility score between a candidate Q-function and the empirical mixture of returns obtained during exploration under various exploration policies. The noise parameter $\sigma$ captures both stochasticity in the environment as well as the additional variability introduced by mixing across multiple policies. The resulting posterior therefore represents a distribution over Q-functions that are plausible given the trajectory of past policies, rather than one centered on a single optimal solution.
+In our setting, the “observations” are Monte Carlo returns generated under past behaviour policies, rather than samples from an optimal policy. Accordingly, the Gaussian likelihood should be interpreted not as a noise model around a fixed ground truth, but as a compatibility score between a candidate Q-function and the empirical mixture of returns obtained during exploration under various behaviour policies. The noise variance $\sigma^2$ captures both stochasticity in the environment as well as the additional variability introduced by mixing across multiple policies. The resulting posterior therefore represents a distribution over Q-functions that are plausible given the trajectory of past policies, rather than one centered on a single optimal solution.
 
-We note that so far, given a linear $Q$ and fixed $\sigma$ and $\alpha$, the above posterior has a closed form solution. To make our model more robust to estimation of observation noise, we introduce an uninformative, log-uniform prior on sigma, which yields the following posterior:
+We note that so far, given a linear $Q$ and fixed $\sigma$ and $\alpha$, the above posterior has a closed form solution. To make our model more robust to estimation of observation noise, we introduce an uninformative, log-uniform prior on sigma, no longer fixing it, and instead reformulating our posterior as the joint posterior over the parameters and noise variance $\sigma^2$:
 
 ```math
 p(\theta, \sigma \mid D, \hat{\theta}, \alpha) \;\propto\;
@@ -48,10 +62,10 @@ p(\theta, \sigma \mid D, \hat{\theta}, \alpha) \;\propto\;
 ```
 
 ```math
-\sigma \sim \text{Gamma}(0, 0)
+\sigma \sim \mathrm{LogUniform}\!\left(10^{-4},\,10^{4}\right)
 ```
 
-No longer conditioning on $\sigma$ and the introduction of the relatively broad prior on $\sigma$ results in a posterior that does not have a closed form solution even given a linear $Q$ function.
+No longer conditioning on $\sigma$ and the introduction of the relatively broad prior on $\sigma$ results in a posterior that does not have a closed form solution.
 
 ```math
 \begin{aligned} p(\theta,\boldsymbol{\alpha},\sigma \mid \mathcal D,\hat{\theta}) \ &\propto\ \underbrace{\prod_{i=1}^K \mathcal N\!\big(y_i \mid f(x_i;\theta),\,\sigma^2\big)}_{\text{data likelihood}} \;\times\; \underbrace{\prod_{j=1}^d \mathcal N\!\big(\theta_j \mid \hat{\theta}_j,\, \alpha_j^2\big)}_{\text{centered ARD prior}} \\[6pt] &\hspace{3.5cm}\times\; \underbrace{\prod_{j=1}^d p(\alpha_j)}_{\alpha_j^{-2}\sim \mathrm{Gamma}(0, 0)} \;\times\; \underbrace{p(\sigma)}_{\sigma\sim \text{Gamma}(0, 0)} \end{aligned}
