@@ -3,7 +3,7 @@ from abc import ABC, abstractmethod
 
 from bac.algorithms.common import MaskedReplayBuffer, sample_gaussian
 from bac.algorithms.policy import Policy
-from bac.algorithms.networks import MultiHeadQNetwork, MultiHeadPolicyNetwork
+from bac.algorithms.vectorized_networks import MultiHeadQNetwork, MultiHeadPolicyNetwork
 
 class MultiHeadActorCritic(ABC):
     @abstractmethod
