@@ -1,7 +1,8 @@
 import os
 from pathlib import Path
 import torch
-from typing import Type, Optional
+from typing import Type, Optional, List, Dict
+from collections import defaultdict
 
 from bac.util import save_to_npy, load_from_npy, plot_performance, plot_variance, plot_cumulative_reward
 from bac.algorithms.common import new_observer, new_sample_observer
@@ -275,11 +276,12 @@ class Manifest:
         return f"{self.outdir}/{prefix}__{name}.npy"
     
     def plot_hmc_comparison(self, prefix: str, truncate_after: Optional[int] = None):
-        results = []
-        colors = []
-
+        random = []
+        vanilla = []
+        large_5k = []
+        
         directory = Path(self.outdir)
-        matches = list(directory.glob(f"{prefix}__hmc_*_results.npy"))
+        matches = list(directory.glob(f"{prefix}_*__hmc_*_results.npy"))
 
         for path in matches:
             data = load_from_npy(str(path))
@@ -287,68 +289,126 @@ class Manifest:
 
             match id:
                 case "random":
-                    results.append((data, "Uniform Random"))
-                    colors.append("red")
+                    random.append(data)
                 case "vanilla":
-                    results.append((data, "Vanilla Actor Critic"))
-                    colors.append("blue")
+                    vanilla.append(data)
                 case "large_100_5k":
-                    results.append((data, "HMC Posterior Sampling"))
-                    colors.append("green")
+                    large_5k.append(data)
                 case _:
                     pass
+
+        # compute means across all seeds
+        random = compute_means(random)
+        vanilla = compute_means(vanilla)
+        large_5k = compute_means(large_5k)
+
+        results = []
+        colors = []
+
+        results.append((random, "Uniform Random"))
+        colors.append("red")
+
+        results.append((vanilla, "Vanilla Actor Critic"))
+        colors.append("blue")
+
+        results.append((large_5k, "HMC Posterior Sampling"))
+        colors.append("green")
                 
         plot_performance(results, colors=colors, truncate_after=truncate_after)
         plot_cumulative_reward(results, colors=colors, truncate_after=truncate_after)
         plot_variance(results, colors=colors, truncate_after=truncate_after)
     
     def plot_hmc_ablation(self, prefix: str, truncate_after: Optional[int] = None):
-        results_large = []
-        colors_large = []
-
-        results_small = []
-        colors_small = []
-
-        results_50k = []
-        colors_50k = []
-
-        results_5k = []
-        colors_5k = []
+        random = []
+        vanilla = []
+        large_5k = []
+        small_5k = []
+        large_50k = []
+        small_50k = []
 
         directory = Path(self.outdir)
-        matches = list(directory.glob(f"{prefix}__hmc_*_results.npy"))
+        matches = list(directory.glob(f"{prefix}_*__hmc_*_results.npy"))
 
         for path in matches:
             data = load_from_npy(str(path))
             id = path.stem.split("__hmc_", 1)[1].removesuffix("_results")
 
             match id:
+                case "random":
+                    random.append(data)
+                case "vanilla":
+                    vanilla.append(data)
                 case "large_100_5k":
-                    results_large.append((data, "HMC AC Large 5K"))
-                    colors_large.append("green")
-
-                    results_5k.append((data, "HMC AC Large 5K"))
-                    colors_5k.append("green")
+                    large_5k.append(data)
                 case "small_100_5k":
-                    results_small.append((data, "HMC AC Small 5K"))
-                    colors_small.append("orange")
-
-                    results_5k.append((data, "HMC AC Small 5K"))
-                    colors_5k.append("orange")
+                    small_5k.append(data)
                 case "large_100_50k":
-                    results_large.append((data, "HMC AC Large 50K"))
-                    colors_large.append("purple")
-
-                    results_50k.append((data, "HMC AC Large 50K"))
-                    colors_50k.append("purple")
+                    large_50k.append(data)
                 case "small_100_50k":
-                    results_small.append((data, "HMC AC Small 50K"))
-                    colors_small.append("brown")
-
-                    results_50k.append((data, "HMC AC Small 50K"))
-                    colors_50k.append("brown")
+                    small_50k.append(data)
                 case _:
                     pass
+
+        # compute means across all seeds
+        random = compute_means(random)
+        vanilla = compute_means(vanilla)
+        large_5k = compute_means(large_5k)
+        small_5k = compute_means(small_5k)
+        large_50k = compute_means(large_50k)
+        small_50k = compute_means(small_50k)
+
+        results_large = []
+        colors_large = []
+        results_small = []
+        colors_small = []
+        results_50k = []
+        colors_50k = []
+        results_5k = []
+        colors_5k = []
+
+        # add random baseline to all plots
+        results_large.append((random, "Uniform Random"))
+        colors_large.append("red")
+        results_small.append((random, "Uniform Random"))
+        colors_small.append("red")
+        results_50k.append((random, "Uniform Random"))
+        colors_50k.append("red")
+        results_5k.append((random, "Uniform Random"))
+        colors_5k.append("red")
+
+        # add vanilla baseline to all plots
+        results_large.append((vanilla, "Vanilla Actor Critic"))
+        colors_large.append("blue")
+        results_small.append((vanilla, "Vanilla Actor Critic"))
+        colors_small.append("blue")
+        results_50k.append((vanilla, "Vanilla Actor Critic"))
+        colors_50k.append("blue")
+        results_5k.append((vanilla, "Vanilla Actor Critic"))
+        colors_5k.append("blue")
+
+        # add large_5k to large and 5k plots
+        results_large.append((large_5k, "HMC AC Large 5K"))
+        colors_large.append("green")
+        results_5k.append((large_5k, "HMC AC Large 5K"))
+        colors_5k.append("green")
+
+        # add small_5k to small and 5k plots
+        results_small.append((small_5k, "HMC AC Small 5K"))
+        colors_small.append("orange")
+        results_5k.append((small_5k, "HMC AC Small 5K"))
+        colors_5k.append("orange")
+
+        # add large_50k to large and 50k plots
+        results_large.append((large_50k, "HMC AC Large 50K"))
+        colors_large.append("purple")
+        results_50k.append((large_50k, "HMC AC Large 50K"))
+        colors_50k.append("purple")
+
+        # add small_50k to small and 50k plots
+        results_small.append((small_50k, "HMC AC Small 50K"))
+        colors_small.append("brown")
+        results_50k.append((small_50k, "HMC AC Small 50K"))
+        colors_50k.append("brown")
 
         plot_performance(results_large, colors=colors_large, truncate_after=truncate_after, title="1024 Observations Per Update")
         plot_performance(results_small, colors=colors_small, truncate_after=truncate_after, title="128 Observations Per Update")
@@ -356,6 +416,60 @@ class Manifest:
         plot_performance(results_50k, colors=colors_50k, truncate_after=truncate_after, title="Updates Every 50K Steps")
     
     def plot_bootstrapped(self, prefix: str, truncate_after: Optional[int] = None):
+        h1_p100 = []
+        h5_p50 = []
+        h5_p80 = []
+        h5_p95 = []
+        h10_p50 = []
+        h10_p80 = []
+        h10_p95 = []
+        h20_p50 = []
+        h20_p80 = []
+        h20_p95 = []
+
+        directory = Path(self.outdir)
+        matches = list(directory.glob(f"{prefix}_*__bs_*_results.npy"))
+
+        for path in matches:
+            data = load_from_npy(str(path))
+            id = path.stem.split("__bs_", 1)[1].removesuffix("_results")
+
+            match id:
+                case "1_p100":
+                    h1_p100.append(data)
+                case "5_p50":
+                    h5_p50.append(data)
+                case "5_p80":
+                    h5_p80.append(data)
+                case "5_p95":
+                    h5_p95.append(data)
+                case "10_p50":
+                    h10_p50.append(data)
+                case "10_p80":
+                    h10_p80.append(data)
+                case "10_p95":
+                    h10_p95.append(data)
+                case "20_p50":
+                    h20_p50.append(data)
+                case "20_p80":
+                    h20_p80.append(data)
+                case "20_p95":
+                    h20_p95.append(data)
+                case _:
+                    pass
+
+        # compute means across all seeds
+        h1_p100 = compute_means(h1_p100)
+        h5_p50 = compute_means(h5_p50)
+        h5_p80 = compute_means(h5_p80)
+        h5_p95 = compute_means(h5_p95)
+        h10_p50 = compute_means(h10_p50)
+        h10_p80 = compute_means(h10_p80)
+        h10_p95 = compute_means(h10_p95)
+        h20_p50 = compute_means(h20_p50)
+        h20_p80 = compute_means(h20_p80)
+        h20_p95 = compute_means(h20_p95)
+
         results_5 = []
         colors_5 = []
 
@@ -374,88 +488,73 @@ class Manifest:
         results_p95 = []
         colors_p95 = []
 
-        directory = Path(self.outdir)
-        matches = list(directory.glob(f"{prefix}__bs_*_results.npy"))
+        # add baseline to all plots
+        results_5.append((h1_p100, "Baseline"))
+        colors_5.append("black")
+        results_10.append((h1_p100, "Baseline"))
+        colors_10.append("black")
+        results_20.append((h1_p100, "Baseline"))
+        colors_20.append("black")
+        results_p50.append((h1_p100, "Baseline"))
+        colors_p50.append("black")
+        results_p80.append((h1_p100, "Baseline"))
+        colors_p80.append("black")
+        results_p95.append((h1_p100, "Baseline"))
+        colors_p95.append("black")
 
-        for path in matches:
-            data = load_from_npy(str(path))
-            id = path.stem.split("__bs_", 1)[1].removesuffix("_results")
+        # add 5_p50 to 5 and p50 plots
+        results_5.append((h5_p50, "5H P50"))
+        colors_5.append("green")
+        results_p50.append((h5_p50, "5H P50"))
+        colors_p50.append("green")
 
-            match id:
-                case "5_p50":
-                    results_5.append((data, "5H P50"))
-                    colors_5.append("green")
+        # add 5_p80 to 5 and p80 plots
+        results_5.append((h5_p80, "5H P80"))
+        colors_5.append("orange")
+        results_p80.append((h5_p80, "5H P80"))
+        colors_p80.append("orange")
 
-                    results_p50.append((data, "5H P50"))
-                    colors_p50.append("green")
-                case "5_p80":
-                    results_5.append((data, "5H P80"))
-                    colors_5.append("orange")
+        # add 5_p95 to 5 and p95 plots
+        results_5.append((h5_p95, "5H P95"))
+        colors_5.append("purple")
+        results_p95.append((h5_p95, "5H P95"))
+        colors_p95.append("purple")
 
-                    results_p80.append((data, "5H P80"))
-                    colors_p80.append("orange")
-                case "5_p95":
-                    results_5.append((data, "5H P95"))
-                    colors_5.append("purple")
+        # add 10_p50 to 10 and p50 plots
+        results_10.append((h10_p50, "10H P50"))
+        colors_10.append("blue")
+        results_p50.append((h10_p50, "10H P50"))
+        colors_p50.append("blue")
 
-                    results_p95.append((data, "5H P95"))
-                    colors_p95.append("purple")
-                case "10_p50":
-                    results_10.append((data, "10H P50"))
-                    colors_10.append("blue")
+        # add 10_p80 to 10 and p80 plots
+        results_10.append((h10_p80, "10H P80"))
+        colors_10.append("red")
+        results_p80.append((h10_p80, "10H P80"))
+        colors_p80.append("red")
 
-                    results_p50.append((data, "10H P50"))
-                    colors_p50.append("blue")
-                case "10_p80":
-                    results_10.append((data, "10H P80"))
-                    colors_10.append("red")
+        # add 10_p95 to 10 and p95 plots
+        results_10.append((h10_p95, "10H P95"))
+        colors_10.append("yellow")
+        results_p95.append((h10_p95, "10H P95"))
+        colors_p95.append("yellow")
 
-                    results_p80.append((data, "10H P80"))
-                    colors_p80.append("red")
-                case "10_p95":
-                    results_10.append((data, "10H P95"))
-                    colors_10.append("yellow")
+        # add 20_p50 to 20 and p50 plots
+        results_20.append((h20_p50, "20H P50"))
+        colors_20.append("pink")
+        results_p50.append((h20_p50, "20H P50"))
+        colors_p50.append("pink")
 
-                    results_p95.append((data, "10H P95"))
-                    colors_p95.append("yellow")
-                case "20_p50":
-                    results_20.append((data, "20H P50"))
-                    colors_20.append("pink")
+        # add 20_p80 to 20 and p80 plots
+        results_20.append((h20_p80, "20H P80"))
+        colors_20.append("brown")
+        results_p80.append((h20_p80, "20H P80"))
+        colors_p80.append("brown")
 
-                    results_p50.append((data, "20H P50"))
-                    colors_p50.append("pink")
-                case "20_p80":
-                    results_20.append((data, "20H P80"))
-                    colors_20.append("brown")
-
-                    results_p80.append((data, "20H P80"))
-                    colors_p80.append("brown")
-                case "20_p95":
-                    results_20.append((data, "20H P95"))
-                    colors_20.append("violet")
-
-                    results_p95.append((data, "20H P95"))
-                    colors_p95.append("violet")
-                case "1_p100":
-                    results_5.append((data, "Baseline"))
-                    colors_5.append("black")
-
-                    results_10.append((data, "Baseline"))
-                    colors_10.append("black")
-
-                    results_20.append((data, "Baseline"))
-                    colors_20.append("black")
-
-                    results_p50.append((data, "Baseline"))
-                    colors_p50.append("black")
-
-                    results_p80.append((data, "Baseline"))
-                    colors_p80.append("black")
-
-                    results_p95.append((data, "Baseline"))
-                    colors_p95.append("black")
-                case _:
-                    pass
+        # add 20_p95 to 20 and p95 plots
+        results_20.append((h20_p95, "20H P95"))
+        colors_20.append("violet")
+        results_p95.append((h20_p95, "20H P95"))
+        colors_p95.append("violet")
 
         plot_performance(results_5, colors=colors_5, truncate_after=truncate_after, title="5 Bootstrapped Heads")
         plot_cumulative_reward(results_5, colors=colors_5, truncate_after=truncate_after, title="5 Bootstrapped Heads")
@@ -474,3 +573,24 @@ class Manifest:
 
         plot_performance(results_p95, colors=colors_p95, truncate_after=truncate_after, title="Bernoulli Mask 0.95")
         plot_cumulative_reward(results_p95, colors=colors_p95, truncate_after=truncate_after, title="Bernoulli Mask 0.95")
+
+
+def compute_means(data_list: List[List[Dict[str, float]]]) -> List[Dict[str, float]]:
+    if not data_list:
+        return []
+    
+    num_steps = len(data_list[0])
+    result = []
+    
+    for step_idx in range(num_steps):
+        sums = defaultdict(float)
+        counts = defaultdict(int)
+        for seed in data_list:
+            step_data = seed[step_idx]
+            for k, v in step_data.items():
+                sums[k] += v
+                counts[k] += 1
+        means = {k: sums[k] / counts[k] for k in sums}
+        result.append(means)
+    
+    return result
