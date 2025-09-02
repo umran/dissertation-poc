@@ -2,7 +2,8 @@ FROM nvidia/cuda:11.8.0-devel-ubuntu22.04
 
 WORKDIR /app
 
-RUN apt-get update && apt-get install -y --no-install-recommends \
+RUN rm -f /etc/apt/sources.list.d/cuda*.list /etc/apt/sources.list.d/nvidia*.list || true \
+    && apt-get update && apt-get install -y --no-install-recommends \
     python3 python3-pip python3-venv \
     build-essential git curl ca-certificates nano \
     && ln -sf /usr/bin/python3 /usr/bin/python \
