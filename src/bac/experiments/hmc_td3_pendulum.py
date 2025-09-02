@@ -1,4 +1,5 @@
 import torch
+import argparse
 
 from bac.algorithms.actor_critic import TD3
 from bac.environments import Pendulum
@@ -6,11 +7,25 @@ from bac.manifest import Manifest
 
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-torch.manual_seed(100)
-if torch.cuda.is_available():
-    torch.cuda.manual_seed_all(100)
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--seed",
+        type=int,
+        required=True,
+        help="Random seed (integer, required)"
+    )
+    args = parser.parse_args()
+    seed = args.seed
 
-prod = Manifest("./out/prod", device=DEVICE)
+    torch.manual_seed(seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(seed)
 
-prod.hmc_baselines("td3_pendulum", Pendulum, TD3, 1_000_000)
-prod.hmc_ablation("td3_pendulum", Pendulum, TD3, 1_000_000)
+    prod = Manifest("./out/prod", device=DEVICE)
+
+    prod.hmc_baselines(f"td3_pendulum_{seed}", Pendulum, TD3, 1_000_000)
+    prod.hmc_ablation(f"td3_pendulum_{seed}", Pendulum, TD3, 1_000_000)
+
+if __name__ == "__main__":
+    main()
