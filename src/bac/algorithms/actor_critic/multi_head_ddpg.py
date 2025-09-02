@@ -3,7 +3,7 @@ import torch.optim as optim
 
 from bac.algorithms.policy import Policy
 from bac.algorithms.common import MaskedReplayBuffer, copy_params, polyak_update, masked_mean
-from bac.algorithms.networks import MultiHeadQNetwork, MultiHeadPolicyNetwork
+from bac.algorithms.vectorized_networks import MultiHeadQNetwork, MultiHeadPolicyNetwork
 from bac.environments import Environment
 from .multi_head_actor_critic import MultiHeadActorCritic, OptimalPolicy, SampledPolicy, NoisyPolicy
 
