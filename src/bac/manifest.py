@@ -319,7 +319,7 @@ class Manifest:
         plot_variance(results, colors=colors, truncate_after=truncate_after)
     
     def plot_hmc_ablation(self, prefix: str, truncate_after: Optional[int] = None):
-        random = []
+        # random = []
         vanilla = []
         large_5k = []
         small_5k = []
@@ -334,8 +334,8 @@ class Manifest:
             id = path.stem.split("__hmc_", 1)[1].removesuffix("_results")
 
             match id:
-                case "random":
-                    random.append(data)
+                # case "random":
+                #     random.append(data)
                 case "vanilla":
                     vanilla.append(data)
                 case "large_100_5k":
@@ -350,7 +350,7 @@ class Manifest:
                     pass
 
         # compute means across all seeds
-        random = compute_means(random)
+        # random = compute_means(random)
         vanilla = compute_means(vanilla)
         large_5k = compute_means(large_5k)
         small_5k = compute_means(small_5k)
@@ -367,14 +367,14 @@ class Manifest:
         colors_5k = []
 
         # add random baseline to all plots
-        results_large.append((random, "Uniform Random"))
-        colors_large.append("red")
-        results_small.append((random, "Uniform Random"))
-        colors_small.append("red")
-        results_50k.append((random, "Uniform Random"))
-        colors_50k.append("red")
-        results_5k.append((random, "Uniform Random"))
-        colors_5k.append("red")
+        # results_large.append((random, "Uniform Random"))
+        # colors_large.append("red")
+        # results_small.append((random, "Uniform Random"))
+        # colors_small.append("red")
+        # results_50k.append((random, "Uniform Random"))
+        # colors_50k.append("red")
+        # results_5k.append((random, "Uniform Random"))
+        # colors_5k.append("red")
 
         # add vanilla baseline to all plots
         results_large.append((vanilla, "Vanilla Actor Critic"))
