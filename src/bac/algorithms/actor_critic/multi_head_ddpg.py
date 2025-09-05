@@ -43,7 +43,7 @@ class MultiHeadDDPG(MultiHeadActorCritic):
         self.policy_optimizer = optim.Adam(self.policy_net.parameters(), lr=policy_lr)
 
         # define the optimal policy
-        self.optimal_policy = OptimalPolicy(self.policy_net)
+        self.optimal_policy = OptimalPolicy(self.policy_net, self.q_net)
 
         # set a noisy exploration policy for when n_heads = 1
         self.exploration_policy = NoisyPolicy(self.policy_net, exploration_noise, action_min, action_max)

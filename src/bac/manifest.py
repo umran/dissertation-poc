@@ -182,9 +182,9 @@ class Manifest:
             save_to_npy(small_100_50k_posterior_samples, small_100_50k_posterior_samples_url)
 
     def bootstrapped(self, prefix: str, environment_cls: Type[Environment], actor_critic_cls: Type[MultiHeadActorCritic], steps: int):
-        bs_20_p50_results_url = self.make_url(prefix, "bs_20_p50_results")
-        bs_20_p80_results_url = self.make_url(prefix, "bs_20_p80_results")
-        bs_20_p95_results_url = self.make_url(prefix, "bs_20_p95_results")
+        # bs_20_p50_results_url = self.make_url(prefix, "bs_20_p50_results")
+        # bs_20_p80_results_url = self.make_url(prefix, "bs_20_p80_results")
+        # bs_20_p95_results_url = self.make_url(prefix, "bs_20_p95_results")
         bs_10_p50_results_url = self.make_url(prefix, "bs_10_p50_results")
         bs_10_p80_results_url = self.make_url(prefix, "bs_10_p80_results")
         bs_10_p95_results_url = self.make_url(prefix, "bs_10_p95_results")
@@ -193,23 +193,23 @@ class Manifest:
         bs_5_p95_results_url = self.make_url(prefix, "bs_5_p95_results")
         bs_1_p100_results_url = self.make_url(prefix, "bs_1_p100_results")
 
-        if not os.path.isfile(bs_20_p50_results_url):
-            bs_20_p50, bs_20_p50_observer, bs_20_p50_results = self.prepare_bs_actor_critic(environment_cls, actor_critic_cls, n_heads=BS_AC_20_P50["n_heads"])
-            bs_20_p50.train(p=BS_AC_20_P50["p"], steps=steps, observer=bs_20_p50_observer)
+        # if not os.path.isfile(bs_20_p50_results_url):
+        #     bs_20_p50, bs_20_p50_observer, bs_20_p50_results = self.prepare_bs_actor_critic(environment_cls, actor_critic_cls, n_heads=BS_AC_20_P50["n_heads"])
+        #     bs_20_p50.train(p=BS_AC_20_P50["p"], steps=steps, observer=bs_20_p50_observer)
             
-            save_to_npy(bs_20_p50_results, bs_20_p50_results_url)
+        #     save_to_npy(bs_20_p50_results, bs_20_p50_results_url)
         
-        if not os.path.isfile(bs_20_p80_results_url):
-            bs_20_p80, bs_20_p80_observer, bs_20_p80_results = self.prepare_bs_actor_critic(environment_cls, actor_critic_cls, n_heads=BS_AC_20_P80["n_heads"])
-            bs_20_p80.train(p=BS_AC_20_P80["p"], steps=steps, observer=bs_20_p80_observer)
+        # if not os.path.isfile(bs_20_p80_results_url):
+        #     bs_20_p80, bs_20_p80_observer, bs_20_p80_results = self.prepare_bs_actor_critic(environment_cls, actor_critic_cls, n_heads=BS_AC_20_P80["n_heads"])
+        #     bs_20_p80.train(p=BS_AC_20_P80["p"], steps=steps, observer=bs_20_p80_observer)
             
-            save_to_npy(bs_20_p80_results, bs_20_p80_results_url)
+        #     save_to_npy(bs_20_p80_results, bs_20_p80_results_url)
 
-        if not os.path.isfile(bs_20_p95_results_url):
-            bs_20_p95, bs_20_p95_observer, bs_20_p95_results = self.prepare_bs_actor_critic(environment_cls, actor_critic_cls, n_heads=BS_AC_20_P95["n_heads"])
-            bs_20_p95.train(p=BS_AC_20_P95["p"], steps=steps, observer=bs_20_p95_observer)
+        # if not os.path.isfile(bs_20_p95_results_url):
+        #     bs_20_p95, bs_20_p95_observer, bs_20_p95_results = self.prepare_bs_actor_critic(environment_cls, actor_critic_cls, n_heads=BS_AC_20_P95["n_heads"])
+        #     bs_20_p95.train(p=BS_AC_20_P95["p"], steps=steps, observer=bs_20_p95_observer)
             
-            save_to_npy(bs_20_p95_results, bs_20_p95_results_url)
+        #     save_to_npy(bs_20_p95_results, bs_20_p95_results_url)
         
         if not os.path.isfile(bs_10_p50_results_url):
             bs_10_p50, bs_10_p50_observer, bs_10_p50_results = self.prepare_bs_actor_critic(environment_cls, actor_critic_cls, n_heads=BS_AC_10_P50["n_heads"])
@@ -423,9 +423,9 @@ class Manifest:
         h10_p50 = []
         h10_p80 = []
         h10_p95 = []
-        h20_p50 = []
-        h20_p80 = []
-        h20_p95 = []
+        # h20_p50 = []
+        # h20_p80 = []
+        # h20_p95 = []
 
         directory = Path(self.outdir)
         matches = list(directory.glob(f"{prefix}_*__bs_*_results.npy"))
@@ -449,12 +449,12 @@ class Manifest:
                     h10_p80.append(data)
                 case "10_p95":
                     h10_p95.append(data)
-                case "20_p50":
-                    h20_p50.append(data)
-                case "20_p80":
-                    h20_p80.append(data)
-                case "20_p95":
-                    h20_p95.append(data)
+                # case "20_p50":
+                #     h20_p50.append(data)
+                # case "20_p80":
+                #     h20_p80.append(data)
+                # case "20_p95":
+                #     h20_p95.append(data)
                 case _:
                     pass
 
@@ -466,9 +466,9 @@ class Manifest:
         h10_p50 = compute_means(h10_p50)
         h10_p80 = compute_means(h10_p80)
         h10_p95 = compute_means(h10_p95)
-        h20_p50 = compute_means(h20_p50)
-        h20_p80 = compute_means(h20_p80)
-        h20_p95 = compute_means(h20_p95)
+        # h20_p50 = compute_means(h20_p50)
+        # h20_p80 = compute_means(h20_p80)
+        # h20_p95 = compute_means(h20_p95)
 
         results_5 = []
         colors_5 = []
@@ -476,8 +476,8 @@ class Manifest:
         results_10 = []
         colors_10 = []
 
-        results_20 = []
-        colors_20 = []
+        # results_20 = []
+        # colors_20 = []
 
         results_p50 = []
         colors_p50 = []
@@ -493,8 +493,8 @@ class Manifest:
         colors_5.append("black")
         results_10.append((h1_p100, "Baseline"))
         colors_10.append("black")
-        results_20.append((h1_p100, "Baseline"))
-        colors_20.append("black")
+        # results_20.append((h1_p100, "Baseline"))
+        # colors_20.append("black")
         results_p50.append((h1_p100, "Baseline"))
         colors_p50.append("black")
         results_p80.append((h1_p100, "Baseline"))
@@ -539,22 +539,22 @@ class Manifest:
         colors_p95.append("yellow")
 
         # add 20_p50 to 20 and p50 plots
-        results_20.append((h20_p50, "20H P50"))
-        colors_20.append("pink")
-        results_p50.append((h20_p50, "20H P50"))
-        colors_p50.append("pink")
+        # results_20.append((h20_p50, "20H P50"))
+        # colors_20.append("pink")
+        # results_p50.append((h20_p50, "20H P50"))
+        # colors_p50.append("pink")
 
         # add 20_p80 to 20 and p80 plots
-        results_20.append((h20_p80, "20H P80"))
-        colors_20.append("brown")
-        results_p80.append((h20_p80, "20H P80"))
-        colors_p80.append("brown")
+        # results_20.append((h20_p80, "20H P80"))
+        # colors_20.append("brown")
+        # results_p80.append((h20_p80, "20H P80"))
+        # colors_p80.append("brown")
 
         # add 20_p95 to 20 and p95 plots
-        results_20.append((h20_p95, "20H P95"))
-        colors_20.append("violet")
-        results_p95.append((h20_p95, "20H P95"))
-        colors_p95.append("violet")
+        # results_20.append((h20_p95, "20H P95"))
+        # colors_20.append("violet")
+        # results_p95.append((h20_p95, "20H P95"))
+        # colors_p95.append("violet")
 
         plot_performance(results_5, colors=colors_5, truncate_after=truncate_after, title="5 Bootstrapped Heads")
         plot_cumulative_reward(results_5, colors=colors_5, truncate_after=truncate_after, title="5 Bootstrapped Heads")
@@ -562,8 +562,8 @@ class Manifest:
         plot_performance(results_10, colors=colors_10, truncate_after=truncate_after, title="10 Bootstrapped Heads")
         plot_cumulative_reward(results_10, colors=colors_10, truncate_after=truncate_after, title="10 Bootstrapped Heads")
 
-        plot_performance(results_20, colors=colors_20, truncate_after=truncate_after, title="20 Bootstrapped Heads")
-        plot_cumulative_reward(results_20, colors=colors_20, truncate_after=truncate_after, title="20 Bootstrapped Heads")
+        # plot_performance(results_20, colors=colors_20, truncate_after=truncate_after, title="20 Bootstrapped Heads")
+        # plot_cumulative_reward(results_20, colors=colors_20, truncate_after=truncate_after, title="20 Bootstrapped Heads")
 
         plot_performance(results_p50, colors=colors_p50, truncate_after=truncate_after, title="Bernoulli Mask 0.5")
         plot_cumulative_reward(results_p50, colors=colors_p50, truncate_after=truncate_after, title="Bernoulli Mask 0.5")

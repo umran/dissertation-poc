@@ -30,21 +30,47 @@ class MultiHeadActorCritic(ABC):
     def get_n_heads(self) -> int:
         pass
 
-class OptimalPolicy(Policy):
-    def __init__(self, policy_net: MultiHeadPolicyNetwork):
-        self.policy_net = policy_net
+# class OptimalPolicy(Policy):
+#     def __init__(self, policy_net: MultiHeadPolicyNetwork):
+#         self.policy_net = policy_net
 
+#     def action(self, state: torch.Tensor) -> torch.Tensor:
+#         if state.ndim == 1:
+#             state = state.unsqueeze(0)
+
+#         all_actions = self.policy_net(state)
+#         mean_action = all_actions.mean(dim=1)
+
+#         if mean_action.shape[0] == 1:
+#             return mean_action.squeeze(0)
+        
+#         return mean_action
+
+class OptimalPolicy(Policy):
+    def __init__(self, policy_net: MultiHeadPolicyNetwork, q_net: MultiHeadQNetwork):
+        self.policy_net = policy_net
+        self.q_net = q_net
+
+    @torch.no_grad()
     def action(self, state: torch.Tensor) -> torch.Tensor:
+        single = False
         if state.ndim == 1:
             state = state.unsqueeze(0)
+            single = True
 
-        all_actions = self.policy_net(state)
-        mean_action = all_actions.mean(dim=1)
+        A_heads = self.policy_net(state)
+        B, H_act, A_dim = A_heads.shape
 
-        if mean_action.shape[0] == 1:
-            return mean_action.squeeze(0)
-        
-        return mean_action
+        # evaluate each candidate under all critic heads
+        S_rep  = state.repeat_interleave(H_act, dim=0)
+        A_flat = A_heads.reshape(B * H_act, A_dim)
+        Q_flat = self.q_net(S_rep, A_flat).squeeze(-1)
+        scores = Q_flat.mean(dim=1).view(B, H_act)
+
+        best_idx    = scores.argmax(dim=1)
+        best_action = A_heads[torch.arange(B, device=A_heads.device), best_idx]
+        return best_action.squeeze(0) if single else best_action
+
 
 class SampledPolicy(Policy):
     def __init__(self, policy_net: MultiHeadPolicyNetwork, head_idx: int):
