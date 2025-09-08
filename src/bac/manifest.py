@@ -400,21 +400,32 @@ class Manifest:
 
         # add large_50k to large and 50k plots
         results_large.append((large_50k, "HMC AC Large 50K"))
-        colors_large.append("purple")
+        colors_large.append("blueviolet")
         results_50k.append((large_50k, "HMC AC Large 50K"))
-        colors_50k.append("purple")
+        colors_50k.append("blueviolet")
 
         # add small_50k to small and 50k plots
         results_small.append((small_50k, "HMC AC Small 50K"))
-        colors_small.append("brown")
+        colors_small.append("crimson")
         results_50k.append((small_50k, "HMC AC Small 50K"))
-        colors_50k.append("brown")
+        colors_50k.append("crimson")
 
         plot_performance(results_large, colors=colors_large, truncate_after=truncate_after, title="1024 Observations Per Update")
+        plot_cumulative_reward(results_large, colors=colors_large, truncate_after=truncate_after, title="1024 Observations Per Update")
+        plot_variance(results_large, colors=colors_large, truncate_after=truncate_after)
+
         plot_performance(results_small, colors=colors_small, truncate_after=truncate_after, title="128 Observations Per Update")
+        plot_cumulative_reward(results_small, colors=colors_small, truncate_after=truncate_after, title="128 Observations Per Update")
+        plot_variance(results_small, colors=colors_small, truncate_after=truncate_after)
+
         plot_performance(results_5k, colors=colors_5k, truncate_after=truncate_after, title="Updates Every 5K Steps")
+        plot_cumulative_reward(results_5k, colors=colors_5k, truncate_after=truncate_after, title="Updates Every 5K Steps")
+        plot_variance(results_5k, colors=colors_5k, truncate_after=truncate_after)
+
         plot_performance(results_50k, colors=colors_50k, truncate_after=truncate_after, title="Updates Every 50K Steps")
-    
+        plot_cumulative_reward(results_50k, colors=colors_50k, truncate_after=truncate_after, title="Updates Every 50K Steps")
+        plot_variance(results_50k, colors=colors_50k, truncate_after=truncate_after)
+
     def plot_bootstrapped(self, prefix: str, truncate_after: Optional[int] = None):
         h1_p100 = []
         h5_p50 = []
@@ -423,9 +434,9 @@ class Manifest:
         h10_p50 = []
         h10_p80 = []
         h10_p95 = []
-        h20_p50 = []
-        h20_p80 = []
-        h20_p95 = []
+        # h20_p50 = []
+        # h20_p80 = []
+        # h20_p95 = []
 
         directory = Path(self.outdir)
         matches = list(directory.glob(f"{prefix}_*__bs_*_results.npy"))
@@ -449,12 +460,12 @@ class Manifest:
                     h10_p80.append(data)
                 case "10_p95":
                     h10_p95.append(data)
-                case "20_p50":
-                    h20_p50.append(data)
-                case "20_p80":
-                    h20_p80.append(data)
-                case "20_p95":
-                    h20_p95.append(data)
+                # case "20_p50":
+                #     h20_p50.append(data)
+                # case "20_p80":
+                #     h20_p80.append(data)
+                # case "20_p95":
+                #     h20_p95.append(data)
                 case _:
                     pass
 
@@ -466,9 +477,9 @@ class Manifest:
         h10_p50 = compute_means(h10_p50)
         h10_p80 = compute_means(h10_p80)
         h10_p95 = compute_means(h10_p95)
-        h20_p50 = compute_means(h20_p50)
-        h20_p80 = compute_means(h20_p80)
-        h20_p95 = compute_means(h20_p95)
+        # h20_p50 = compute_means(h20_p50)
+        # h20_p80 = compute_means(h20_p80)
+        # h20_p95 = compute_means(h20_p95)
 
         results_5 = []
         colors_5 = []
@@ -476,8 +487,8 @@ class Manifest:
         results_10 = []
         colors_10 = []
 
-        results_20 = []
-        colors_20 = []
+        # results_20 = []
+        # colors_20 = []
 
         results_p50 = []
         colors_p50 = []
@@ -493,8 +504,8 @@ class Manifest:
         colors_5.append("black")
         results_10.append((h1_p100, "Baseline"))
         colors_10.append("black")
-        results_20.append((h1_p100, "Baseline"))
-        colors_20.append("black")
+        # results_20.append((h1_p100, "Baseline"))
+        # colors_20.append("black")
         results_p50.append((h1_p100, "Baseline"))
         colors_p50.append("black")
         results_p80.append((h1_p100, "Baseline"))
@@ -539,41 +550,46 @@ class Manifest:
         colors_p95.append("yellow")
 
         # add 20_p50 to 20 and p50 plots
-        results_20.append((h20_p50, "20H P50"))
-        colors_20.append("pink")
-        results_p50.append((h20_p50, "20H P50"))
-        colors_p50.append("pink")
+        # results_20.append((h20_p50, "20H P50"))
+        # colors_20.append("pink")
+        # results_p50.append((h20_p50, "20H P50"))
+        # colors_p50.append("pink")
 
         # add 20_p80 to 20 and p80 plots
-        results_20.append((h20_p80, "20H P80"))
-        colors_20.append("brown")
-        results_p80.append((h20_p80, "20H P80"))
-        colors_p80.append("brown")
+        # results_20.append((h20_p80, "20H P80"))
+        # colors_20.append("brown")
+        # results_p80.append((h20_p80, "20H P80"))
+        # colors_p80.append("brown")
 
         # add 20_p95 to 20 and p95 plots
-        results_20.append((h20_p95, "20H P95"))
-        colors_20.append("violet")
-        results_p95.append((h20_p95, "20H P95"))
-        colors_p95.append("violet")
+        # results_20.append((h20_p95, "20H P95"))
+        # colors_20.append("violet")
+        # results_p95.append((h20_p95, "20H P95"))
+        # colors_p95.append("violet")
 
         plot_performance(results_5, colors=colors_5, truncate_after=truncate_after, title="5 Bootstrapped Heads")
         plot_cumulative_reward(results_5, colors=colors_5, truncate_after=truncate_after, title="5 Bootstrapped Heads")
+        plot_variance(results_5, colors=colors_5, truncate_after=truncate_after)
 
         plot_performance(results_10, colors=colors_10, truncate_after=truncate_after, title="10 Bootstrapped Heads")
         plot_cumulative_reward(results_10, colors=colors_10, truncate_after=truncate_after, title="10 Bootstrapped Heads")
+        plot_variance(results_10, colors=colors_10, truncate_after=truncate_after)
 
-        plot_performance(results_20, colors=colors_20, truncate_after=truncate_after, title="20 Bootstrapped Heads")
-        plot_cumulative_reward(results_20, colors=colors_20, truncate_after=truncate_after, title="20 Bootstrapped Heads")
+        # plot_performance(results_20, colors=colors_20, truncate_after=truncate_after, title="20 Bootstrapped Heads")
+        # plot_cumulative_reward(results_20, colors=colors_20, truncate_after=truncate_after, title="20 Bootstrapped Heads")
+        # plot_variance(results_20, colors=colors_20, truncate_after=truncate_after)
 
         plot_performance(results_p50, colors=colors_p50, truncate_after=truncate_after, title="Bernoulli Mask 0.5")
         plot_cumulative_reward(results_p50, colors=colors_p50, truncate_after=truncate_after, title="Bernoulli Mask 0.5")
+        plot_variance(results_p50, colors=colors_p50, truncate_after=truncate_after)
 
         plot_performance(results_p80, colors=colors_p80, truncate_after=truncate_after, title="Bernoulli Mask 0.8")
         plot_cumulative_reward(results_p80, colors=colors_p80, truncate_after=truncate_after, title="Bernoulli Mask 0.8")
+        plot_variance(results_p80, colors=colors_p80, truncate_after=truncate_after)
 
         plot_performance(results_p95, colors=colors_p95, truncate_after=truncate_after, title="Bernoulli Mask 0.95")
         plot_cumulative_reward(results_p95, colors=colors_p95, truncate_after=truncate_after, title="Bernoulli Mask 0.95")
-
+        plot_variance(results_p95, colors=colors_p95, truncate_after=truncate_after)
 
 def compute_means(data_list: List[List[Dict[str, float]]]) -> List[Dict[str, float]]:
     if not data_list:
