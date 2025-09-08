@@ -38,8 +38,7 @@ $$
 G^{(e)}_t \;=\; \sum_{k=0}^{T_e-t-1} \gamma^{k}\, r^{(e)}_{t+k+1}.
 $$
 
-Since our environments involve continuous states and actions, we record one sample for **every** occurrence of a state–action pair within an episode, as opposed to _single-visit_ Monte Carlo, where only the first occurrence is recorded. Sutton and Barto show that in the limit, both approaches lead to an unbiased estimate of the state-action value given the behaviour policy. Thus our dataset contains triples
-$(s^{(e)}_t,\ a^{(e)}_t,\ G^{(e)}_t)$ for all $t=0,\ldots, T_e-1$ (and across all episodes).
+Since our environments involve continuous states and actions, we record one sample for **every** occurrence of a state–action pair within an episode, as opposed to _single-visit_ Monte Carlo, where only the first occurrence is recorded. Sutton and Barto show that in the limit, both approaches lead to an unbiased estimate of the state-action value given the behaviour policy.
 
 We may begin to express this posterior with a Gaussian likelihood centered at $Q(s_i, a_i; \theta)$ with known noise $\sigma > 0$, and a Gaussian prior on $\theta$ centered at $\hat{\theta}$ with fixed width $\alpha > 0$.
 
