@@ -182,9 +182,9 @@ class Manifest:
             save_to_npy(small_100_50k_posterior_samples, small_100_50k_posterior_samples_url)
 
     def bootstrapped(self, prefix: str, environment_cls: Type[Environment], actor_critic_cls: Type[MultiHeadActorCritic], steps: int):
-        # bs_20_p50_results_url = self.make_url(prefix, "bs_20_p50_results")
-        # bs_20_p80_results_url = self.make_url(prefix, "bs_20_p80_results")
-        # bs_20_p95_results_url = self.make_url(prefix, "bs_20_p95_results")
+        bs_20_p50_results_url = self.make_url(prefix, "bs_20_p50_results")
+        bs_20_p80_results_url = self.make_url(prefix, "bs_20_p80_results")
+        bs_20_p95_results_url = self.make_url(prefix, "bs_20_p95_results")
         bs_10_p50_results_url = self.make_url(prefix, "bs_10_p50_results")
         bs_10_p80_results_url = self.make_url(prefix, "bs_10_p80_results")
         bs_10_p95_results_url = self.make_url(prefix, "bs_10_p95_results")
@@ -193,23 +193,23 @@ class Manifest:
         bs_5_p95_results_url = self.make_url(prefix, "bs_5_p95_results")
         bs_1_p100_results_url = self.make_url(prefix, "bs_1_p100_results")
 
-        # if not os.path.isfile(bs_20_p50_results_url):
-        #     bs_20_p50, bs_20_p50_observer, bs_20_p50_results = self.prepare_bs_actor_critic(environment_cls, actor_critic_cls, n_heads=BS_AC_20_P50["n_heads"])
-        #     bs_20_p50.train(p=BS_AC_20_P50["p"], steps=steps, observer=bs_20_p50_observer)
+        if not os.path.isfile(bs_20_p50_results_url):
+            bs_20_p50, bs_20_p50_observer, bs_20_p50_results = self.prepare_bs_actor_critic(environment_cls, actor_critic_cls, n_heads=BS_AC_20_P50["n_heads"])
+            bs_20_p50.train(p=BS_AC_20_P50["p"], steps=steps, observer=bs_20_p50_observer)
             
-        #     save_to_npy(bs_20_p50_results, bs_20_p50_results_url)
+            save_to_npy(bs_20_p50_results, bs_20_p50_results_url)
         
-        # if not os.path.isfile(bs_20_p80_results_url):
-        #     bs_20_p80, bs_20_p80_observer, bs_20_p80_results = self.prepare_bs_actor_critic(environment_cls, actor_critic_cls, n_heads=BS_AC_20_P80["n_heads"])
-        #     bs_20_p80.train(p=BS_AC_20_P80["p"], steps=steps, observer=bs_20_p80_observer)
+        if not os.path.isfile(bs_20_p80_results_url):
+            bs_20_p80, bs_20_p80_observer, bs_20_p80_results = self.prepare_bs_actor_critic(environment_cls, actor_critic_cls, n_heads=BS_AC_20_P80["n_heads"])
+            bs_20_p80.train(p=BS_AC_20_P80["p"], steps=steps, observer=bs_20_p80_observer)
             
-        #     save_to_npy(bs_20_p80_results, bs_20_p80_results_url)
+            save_to_npy(bs_20_p80_results, bs_20_p80_results_url)
 
-        # if not os.path.isfile(bs_20_p95_results_url):
-        #     bs_20_p95, bs_20_p95_observer, bs_20_p95_results = self.prepare_bs_actor_critic(environment_cls, actor_critic_cls, n_heads=BS_AC_20_P95["n_heads"])
-        #     bs_20_p95.train(p=BS_AC_20_P95["p"], steps=steps, observer=bs_20_p95_observer)
+        if not os.path.isfile(bs_20_p95_results_url):
+            bs_20_p95, bs_20_p95_observer, bs_20_p95_results = self.prepare_bs_actor_critic(environment_cls, actor_critic_cls, n_heads=BS_AC_20_P95["n_heads"])
+            bs_20_p95.train(p=BS_AC_20_P95["p"], steps=steps, observer=bs_20_p95_observer)
             
-        #     save_to_npy(bs_20_p95_results, bs_20_p95_results_url)
+            save_to_npy(bs_20_p95_results, bs_20_p95_results_url)
         
         if not os.path.isfile(bs_10_p50_results_url):
             bs_10_p50, bs_10_p50_observer, bs_10_p50_results = self.prepare_bs_actor_critic(environment_cls, actor_critic_cls, n_heads=BS_AC_10_P50["n_heads"])
@@ -400,21 +400,32 @@ class Manifest:
 
         # add large_50k to large and 50k plots
         results_large.append((large_50k, "HMC AC Large 50K"))
-        colors_large.append("purple")
+        colors_large.append("blueviolet")
         results_50k.append((large_50k, "HMC AC Large 50K"))
-        colors_50k.append("purple")
+        colors_50k.append("blueviolet")
 
         # add small_50k to small and 50k plots
         results_small.append((small_50k, "HMC AC Small 50K"))
-        colors_small.append("brown")
+        colors_small.append("crimson")
         results_50k.append((small_50k, "HMC AC Small 50K"))
-        colors_50k.append("brown")
+        colors_50k.append("crimson")
 
         plot_performance(results_large, colors=colors_large, truncate_after=truncate_after, title="1024 Observations Per Update")
+        plot_cumulative_reward(results_large, colors=colors_large, truncate_after=truncate_after, title="1024 Observations Per Update")
+        plot_variance(results_large, colors=colors_large, truncate_after=truncate_after)
+
         plot_performance(results_small, colors=colors_small, truncate_after=truncate_after, title="128 Observations Per Update")
+        plot_cumulative_reward(results_small, colors=colors_small, truncate_after=truncate_after, title="128 Observations Per Update")
+        plot_variance(results_small, colors=colors_small, truncate_after=truncate_after)
+
         plot_performance(results_5k, colors=colors_5k, truncate_after=truncate_after, title="Updates Every 5K Steps")
+        plot_cumulative_reward(results_5k, colors=colors_5k, truncate_after=truncate_after, title="Updates Every 5K Steps")
+        plot_variance(results_5k, colors=colors_5k, truncate_after=truncate_after)
+
         plot_performance(results_50k, colors=colors_50k, truncate_after=truncate_after, title="Updates Every 50K Steps")
-    
+        plot_cumulative_reward(results_50k, colors=colors_50k, truncate_after=truncate_after, title="Updates Every 50K Steps")
+        plot_variance(results_50k, colors=colors_50k, truncate_after=truncate_after)
+
     def plot_bootstrapped(self, prefix: str, truncate_after: Optional[int] = None):
         h1_p100 = []
         h5_p50 = []
@@ -558,22 +569,27 @@ class Manifest:
 
         plot_performance(results_5, colors=colors_5, truncate_after=truncate_after, title="5 Bootstrapped Heads")
         plot_cumulative_reward(results_5, colors=colors_5, truncate_after=truncate_after, title="5 Bootstrapped Heads")
+        plot_variance(results_5, colors=colors_5, truncate_after=truncate_after)
 
         plot_performance(results_10, colors=colors_10, truncate_after=truncate_after, title="10 Bootstrapped Heads")
         plot_cumulative_reward(results_10, colors=colors_10, truncate_after=truncate_after, title="10 Bootstrapped Heads")
+        plot_variance(results_10, colors=colors_10, truncate_after=truncate_after)
 
         # plot_performance(results_20, colors=colors_20, truncate_after=truncate_after, title="20 Bootstrapped Heads")
         # plot_cumulative_reward(results_20, colors=colors_20, truncate_after=truncate_after, title="20 Bootstrapped Heads")
+        # plot_variance(results_20, colors=colors_20, truncate_after=truncate_after)
 
         plot_performance(results_p50, colors=colors_p50, truncate_after=truncate_after, title="Bernoulli Mask 0.5")
         plot_cumulative_reward(results_p50, colors=colors_p50, truncate_after=truncate_after, title="Bernoulli Mask 0.5")
+        plot_variance(results_p50, colors=colors_p50, truncate_after=truncate_after)
 
         plot_performance(results_p80, colors=colors_p80, truncate_after=truncate_after, title="Bernoulli Mask 0.8")
         plot_cumulative_reward(results_p80, colors=colors_p80, truncate_after=truncate_after, title="Bernoulli Mask 0.8")
+        plot_variance(results_p80, colors=colors_p80, truncate_after=truncate_after)
 
         plot_performance(results_p95, colors=colors_p95, truncate_after=truncate_after, title="Bernoulli Mask 0.95")
         plot_cumulative_reward(results_p95, colors=colors_p95, truncate_after=truncate_after, title="Bernoulli Mask 0.95")
-
+        plot_variance(results_p95, colors=colors_p95, truncate_after=truncate_after)
 
 def compute_means(data_list: List[List[Dict[str, float]]]) -> List[Dict[str, float]]:
     if not data_list:
