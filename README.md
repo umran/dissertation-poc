@@ -1,6 +1,6 @@
 # Bayesian Actor–Critic (BAC) — Experiments
 
-This repo contains experiment scripts and notebooks for HMC-AC (Hamiltonian Monte Carlo Actor–Critic) and Bootstrapped-AC.
+This repo contains implementations, experiment scripts and notebooks for HMC-AC (Hamiltonian Monte Carlo Actor–Critic) and Bootstrapped-AC.
 
 ## Installation
 
